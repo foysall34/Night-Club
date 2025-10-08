@@ -3,7 +3,13 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import ClubOwner
+from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice
+
+# These registrations are correct and have been kept.
+admin.site.register(ClubType)
+admin.site.register(Vibes_Choice)
+admin.site.register(LegalContent)
+admin.site.register(ClubProfile)
 
 @admin.register(ClubOwner)
 class ClubOwnerAdmin(admin.ModelAdmin):
@@ -24,7 +30,8 @@ class ClubOwnerAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Personal Information', {
-            'fields': ('username', 'email', 'full_name', 'phone_number')
+            # --- FIX: Removed 'username' from this line as it does not exist on the ClubOwner model. ---
+            'fields': ('email', 'full_name', 'phone_number')
         }),
         ('Venue Information', {
             'fields': ('venue_name', 'venue_address', 'link')
@@ -38,12 +45,17 @@ class ClubOwnerAdmin(admin.ModelAdmin):
         ('Important Dates', {
             'fields': ('last_login', 'date_joined')
         }),
+        # You may want to add the groups and user_permissions fields here if you need to manage them
+        # ('Groups & Permissions', {
+        #     'fields': ('groups', 'user_permissions')
+        # })
     )
     readonly_fields = ('last_login', 'date_joined')
 
     def save_model(self, request, obj, form, change):
         """
         This method is called when a ClubOwner object is saved from the admin panel.
+        Your custom email sending logic is preserved here.
         """
         if change and 'verification_status' in form.changed_data:
             # Send an email only if the verification status has changed

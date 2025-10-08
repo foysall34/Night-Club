@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     # app 
     'myapp' ,
     'owner',
+    'user_auth',
 
     # framework 
     'rest_framework',
@@ -51,6 +52,10 @@ MIDDLEWARE = [
 
 
 AUTH_USER_MODEL = 'owner.ClubOwner'
+AUTH_USER_MODEL = 'user_auth.User'
+
+
+
 ROOT_URLCONF = 'project_root.urls'
 
 TEMPLATES = [
@@ -69,7 +74,12 @@ TEMPLATES = [
     },
 ]
 
-
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
+     
+}
 
 
 # Email Configuration from .env file
@@ -84,7 +94,22 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 
 
 
+from datetime import timedelta
 
+
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=7),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),     
+    "ROTATE_REFRESH_TOKENS": True,                 
+    "BLACKLIST_AFTER_ROTATION": True,                
+    
+ 
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+
+}
 
 
 WSGI_APPLICATION = 'project_root.wsgi.application'
@@ -135,12 +160,15 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-
+import os
 MEDIA_URL = '/media/'
 STATIC_URL = 'static/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# অস্থায়ী ফাইল সংরক্ষণের জন্য নতুন ডিরেক্টরি
+
+
+
+
 TEMP_MEDIA_ROOT = os.path.join(MEDIA_ROOT, 'tmp')
 
 # Default primary key field type

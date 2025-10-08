@@ -8,9 +8,7 @@ from .serializers import StudentSerializer
 
 @api_view(['GET', 'POST'])
 def student_list(request):
-    """
-    সকল ছাত্রের তালিকা দেখুন অথবা নতুন ছাত্র যোগ করুন।
-    """
+  
     if request.method == 'GET':
         students = Student.objects.all()
         serializer = StudentSerializer(students, many=True)
@@ -26,9 +24,7 @@ def student_list(request):
 
 @api_view(['GET', 'PUT', 'DELETE'])
 def student_detail(request, pk):
-    """
-    একজন নির্দিষ্ট ছাত্রের তথ্য দেখুন, আপডেট করুন অথবা ডিলিট করুন।
-    """
+
     try:
         student = Student.objects.get(pk=pk)
     except Student.DoesNotExist:

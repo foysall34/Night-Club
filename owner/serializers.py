@@ -21,6 +21,9 @@ class OTPVerifySerializer(serializers.Serializer):
 class ResendOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
+
+
+
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
@@ -32,3 +35,151 @@ class ChangePasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=4)
     new_password = serializers.CharField(write_only=True)
+
+
+
+
+# For  owner profile club 
+# api/serializers.py
+
+from rest_framework import serializers
+from .models import ClubProfile
+
+from rest_framework import serializers
+from .models import ClubProfile, ClubType, Vibes_Choice,ClubOwner
+
+
+
+
+# owner/serializers.py
+
+class CommaSeparatedPKField(serializers.Field):
+ 
+    def __init__(self, queryset, **kwargs):
+        self.queryset = queryset
+        
+   
+        super().__init__(**kwargs)
+        
+
+        self.error_messages['does_not_exist'] = 'Invalid pk "{pk_value}" - object does not exist.'
+        self.error_messages['invalid'] = 'Input must be a comma-separated string of numbers.'
+        
+
+    def to_internal_value(self, data):
+   
+        if not isinstance(data, str):
+            self.fail('invalid')
+
+        id_strings = [s.strip() for s in data.split(',') if s.strip()]
+        
+        try:
+            ids = [int(id_str) for id_str in id_strings]
+        except (ValueError, TypeError):
+            self.fail('invalid')
+
+        found_objects = self.queryset.filter(pk__in=ids)
+        
+        if len(ids) != found_objects.count():
+            found_ids = found_objects.values_list('pk', flat=True)
+            invalid_ids = set(ids) - set(found_ids)
+            self.fail('does_not_exist', pk_value=', '.join(map(str, invalid_ids)))
+
+        return found_objects
+
+    def to_representation(self, value):
+  
+        return None
+
+
+
+class ClubProfileSerializer(serializers.ModelSerializer):
+    owner = serializers.StringRelatedField(read_only=True)
+    club_type = serializers.StringRelatedField(many=True, read_only=True)
+    vibes_type = serializers.StringRelatedField(many=True, read_only=True)
+
+    club_type_ids = CommaSeparatedPKField(
+        queryset=ClubType.objects.all(),
+        source='club_type',
+        write_only=True,
+        required=False
+    )
+    vibes_type_ids = CommaSeparatedPKField(
+        queryset=Vibes_Choice.objects.all(),
+        source='vibes_type',
+        write_only=True,
+        required=False
+    )
+
+    class Meta:
+        model = ClubProfile
+        fields = [
+            'id', 'owner', 'clubName', 'dressCode', 'ageRequirement', 'coverCharge',
+            'clubImageUrl', 'features', 'events', 'practicalInfo', 'contact',
+            'club_type', 'vibes_type',
+            'club_type_ids', 'vibes_type_ids'
+        ]
+        read_only_fields = ('owner',)
+    
+    def create(self, validated_data):
+        validated_data['owner'] = self.context['request'].user
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        return super().update(instance, validated_data)
+
+
+
+
+
+
+# for weekly hours 
+# owner/serializers.py
+
+from rest_framework import serializers
+from .models import ClubProfile
+import re
+
+class WeeklyHoursSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = ClubProfile
+        fields = ['weekly_hours']
+
+    def validate_weekly_hours(self, data):
+        """
+        ইনকামিং JSON ডেটার গঠন এবং সময় ফরম্যাট যাচাই করে।
+        """
+        if not isinstance(data, dict):
+            raise serializers.ValidationError("Weekly hours must be a JSON object.")
+
+        REQUIRED_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        
+        # প্রতিটি দিনের জন্য ডেটা যাচাই করা হচ্ছে
+        for day in REQUIRED_DAYS:
+            if day not in data:
+                raise serializers.ValidationError(f"Missing data for {day}.")
+            
+            day_schedule = data[day]
+            if not isinstance(day_schedule, dict) or 'start_time' not in day_schedule or 'end_time' not in day_schedule:
+                raise serializers.ValidationError(f"Schedule for {day} must be an object with 'start_time' and 'end_time'.")
+
+            # সময় ফরম্যাট "HH:MM" কিনা তা Regex দিয়ে যাচাই করা হচ্ছে
+            time_format = re.compile(r'^\d{2}:\d{2}$')
+            if not time_format.match(day_schedule['start_time']) or not time_format.match(day_schedule['end_time']):
+                raise serializers.ValidationError(f"Time format for {day} must be 'HH:MM'.")
+
+        return data
+
+
+
+
+
+from rest_framework import serializers
+from .models import LegalContent
+
+class LegalContentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LegalContent
+    
+        fields = ['title', 'content', 'last_updated']

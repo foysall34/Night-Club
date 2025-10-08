@@ -139,8 +139,6 @@ def get_default_weekly_hours():
 
 
 class ClubProfile(models.Model):
-
-    
     owner = models.ForeignKey(ClubOwner, on_delete=models.CASCADE, related_name='club_profile' , null=True)
     clubName = models.CharField(max_length=255 , blank=True , null=True) 
     club_type = models.ManyToManyField(ClubType, blank=True)
@@ -161,7 +159,58 @@ class ClubProfile(models.Model):
     
 
 
-# For club weekly Hours 
+# For event
+class Event(models.Model):
+  
+    STATUS_CHOICES = (
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+        ('live', 'Live'),
+    )
+
+  
+    club = models.ForeignKey(ClubProfile, on_delete=models.CASCADE, related_name='club_events')
+    
+    
+    name = models.CharField(max_length=255, verbose_name="Event Name")
+    date = models.DateField()
+    time = models.TimeField()
+    entry_fee = models.CharField(max_length=100, blank=True, help_text="e.g., $20 or Free")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} at {self.club.clubName}"
+
+    class Meta:
+        ordering = ['-date', '-time'] 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

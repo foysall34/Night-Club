@@ -3,10 +3,11 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice
+from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice, Event
 
 # These registrations are correct and have been kept.
 admin.site.register(ClubType)
+admin.site.register(Event)
 admin.site.register(Vibes_Choice)
 admin.site.register(LegalContent)
 admin.site.register(ClubProfile)

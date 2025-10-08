@@ -13,5 +13,7 @@ urlpatterns = [
     path('club-profiles/<int:pk>/', ClubProfileListCreateAPIView.as_view(), name='club-profile-detail'),
     path('legal/<slug:type_slug>/', LegalContentView.as_view(), name='legal-content'),
     path('club-profile/weekly-hours/', WeeklyHoursAPIView.as_view(), name='club-profile-weekly-hours'),
+    path('events/', EventListCreateAPIView.as_view(), name='event-list-create'),
+    path('events/<int:pk>/', EventRetrieveUpdateDestroyAPIView.as_view(), name='event-detail'),
 
 ]

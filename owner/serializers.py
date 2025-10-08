@@ -137,7 +137,7 @@ class ClubProfileSerializer(serializers.ModelSerializer):
 # owner/serializers.py
 
 from rest_framework import serializers
-from .models import ClubProfile
+from .models import ClubProfile , Event
 import re
 
 class WeeklyHoursSerializer(serializers.ModelSerializer):
@@ -147,15 +147,13 @@ class WeeklyHoursSerializer(serializers.ModelSerializer):
         fields = ['weekly_hours']
 
     def validate_weekly_hours(self, data):
-        """
-        ইনকামিং JSON ডেটার গঠন এবং সময় ফরম্যাট যাচাই করে।
-        """
+      
         if not isinstance(data, dict):
             raise serializers.ValidationError("Weekly hours must be a JSON object.")
 
         REQUIRED_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
         
-        # প্রতিটি দিনের জন্য ডেটা যাচাই করা হচ্ছে
+   
         for day in REQUIRED_DAYS:
             if day not in data:
                 raise serializers.ValidationError(f"Missing data for {day}.")
@@ -164,12 +162,58 @@ class WeeklyHoursSerializer(serializers.ModelSerializer):
             if not isinstance(day_schedule, dict) or 'start_time' not in day_schedule or 'end_time' not in day_schedule:
                 raise serializers.ValidationError(f"Schedule for {day} must be an object with 'start_time' and 'end_time'.")
 
-            # সময় ফরম্যাট "HH:MM" কিনা তা Regex দিয়ে যাচাই করা হচ্ছে
+  
             time_format = re.compile(r'^\d{2}:\d{2}$')
             if not time_format.match(day_schedule['start_time']) or not time_format.match(day_schedule['end_time']):
                 raise serializers.ValidationError(f"Time format for {day} must be 'HH:MM'.")
 
         return data
+
+
+
+
+
+"""************ For Event & Legal Content ************"""
+
+
+class OwnerClubSerializer(serializers.ModelSerializer):
+ 
+    class Meta:
+        model = ClubProfile
+        fields = ['id', 'clubName']
+
+
+# --- মূল Event Serializer ---
+class EventSerializer(serializers.ModelSerializer):
+   
+    # GET অনুরোধের উত্তরে ক্লাবের নাম দেখানোর জন্য
+    club_name = serializers.StringRelatedField(source='club', read_only=True)
+
+    class Meta:
+        model = Event
+        fields = ['id', 'club', 'club_name', 'name', 'date', 'time', 'entry_fee', 'status', 'created_at']
+        extra_kwargs = {
+            'club': {'write_only': True} # ইনপুটের সময় শুধু ID নেবে, আউটপুটে দেখাবে না
+        }
+
+    def __init__(self, *args, **kwargs):
+        """
+        Serializer ইনিশিয়ালাইজ করার সময় owner-এর ক্লাবগুলো ফিল্টার করে।
+        """
+        super().__init__(*args, **kwargs)
+        
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            owner = request.user
+            # 'club' ফিল্ডের queryset-কে ফিল্টার করে শুধুমাত্র লগইন করা মালিকের ক্লাবগুলো দেখানো হচ্ছে
+            self.fields['club'].queryset = ClubProfile.objects.filter(owner=owner)
+
+
+
+
+
+
+
 
 
 

@@ -329,6 +329,75 @@ class ClubProfileView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
+
+""" Club Event & Legal Content Views """
+
+class OwnerClubListAPIView(APIView):
+    authentication_classes = [ClubOwnerAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        """
+        লগইন করা মালিকের ক্লাবগুলোর একটি তালিকা রিটার্ন করে।
+        """
+        clubs = ClubProfile.objects.filter(owner=request.user)
+        serializer = OwnerClubSerializer(clubs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+# --- View 2: ইভেন্টের তালিকা এবং নতুন ইভেন্ট তৈরি ---
+class EventListCreateAPIView(APIView):
+    authentication_classes = [ClubOwnerAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        """
+        মালিকের সব ক্লাবের সব ইভেন্টের তালিকা দেখায়।
+        """
+        events = Event.objects.filter(club__owner=request.user)
+        serializer = EventSerializer(events, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        """
+        একটি নতুন ইভেন্ট তৈরি করে।
+        """
+        serializer = EventSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+# --- View 3: নির্দিষ্ট ইভেন্ট দেখা, আপডেট ও ডিলিট ---
+class EventRetrieveUpdateDestroyAPIView(APIView):
+    authentication_classes = [ClubOwnerAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
+        """
+        একটি ইভেন্ট খুঁজে বের করে এবং মালিকানা যাচাই করে।
+        """
+        try:
+            # ইভেন্টের ক্লাবটির মালিক লগইন করা user কিনা তা যাচাই করা হচ্ছে
+            return Event.objects.get(pk=pk, club__owner=user)
+        except Event.DoesNotExist:
+            raise Http404
+
+    def get(self, request, pk, *args, **kwargs):
+        event = self.get_object(pk, request.user)
+        serializer = EventSerializer(event)
+        return Response(serializer.data)
+
+    def patch(self, request, pk, *args, **kwargs):
+        event = self.get_object(pk, request.user)
+        serializer = EventSerializer(event, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk, *args, **kwargs):
+        event = self.get_object(pk, request.user)
+        event.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 # api/views.py
 
 from rest_framework.views import APIView
@@ -352,9 +421,7 @@ class LegalContentView(APIView):
         return None
 
     def get(self, request, type_slug, format=None):
-        """
-        নির্দিষ্ট ধরনের legal document রিটার্ন করে।
-        """
+       
         content_type = self.get_document_type(type_slug)
         
         if not content_type:

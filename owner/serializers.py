@@ -2,6 +2,10 @@
 from rest_framework import serializers
 
 # শুধুমাত্র ডেটা ভ্যালিডেশনের জন্য
+# serializers.py
+
+from rest_framework import serializers
+
 class ClubOwnerRegistrationSerializer(serializers.Serializer):
     full_name = serializers.CharField(required=True)
     email = serializers.EmailField(required=True)
@@ -14,9 +18,41 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
     id_back_page = serializers.FileField(required=True)
     link = serializers.CharField(required=False, allow_blank=True, default='')
 
-class OTPVerifySerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    otp = serializers.CharField(max_length=4)
+
+    def validate_email(self, value):
+        """
+        Check that the email is not already in use.
+        """
+        if ClubOwner.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email address already exists.")
+        return value
+
+
+
+
+    def create(self, validated_data):
+        """
+        Create and return a new ClubOwner instance, given the validated data.
+        """
+        # Use the custom manager's create_user method to ensure password hashing
+        user = ClubOwner.objects.create_user(
+            email=validated_data['email'],
+            full_name=validated_data['full_name'],
+            password=validated_data['password'],
+            phone_number=validated_data['phone_number'],
+            venue_name=validated_data['venue_name'],
+            venue_address=validated_data['venue_address'],
+            profile_image=validated_data['profile_image'],
+            id_front_page=validated_data['id_front_page'],
+            id_back_page=validated_data['id_back_page'],
+            link=validated_data.get('link', '')
+        )
+        return user
+
+# --- এই নতুন ক্লাসটি যোগ করুন ---
+class OwnerVerifyOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(required=True, max_length=4)
 
 class ResendOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -24,7 +60,7 @@ class ResendOTPSerializer(serializers.Serializer):
 
 
 
-class LoginSerializer(serializers.Serializer):
+class  LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
@@ -183,39 +219,28 @@ class OwnerClubSerializer(serializers.ModelSerializer):
         fields = ['id', 'clubName']
 
 
-# --- মূল Event Serializer ---
+
 class EventSerializer(serializers.ModelSerializer):
    
-    # GET অনুরোধের উত্তরে ক্লাবের নাম দেখানোর জন্য
+ 
     club_name = serializers.StringRelatedField(source='club', read_only=True)
 
     class Meta:
         model = Event
         fields = ['id', 'club', 'club_name', 'name', 'date', 'time', 'entry_fee', 'status', 'created_at']
         extra_kwargs = {
-            'club': {'write_only': True} # ইনপুটের সময় শুধু ID নেবে, আউটপুটে দেখাবে না
+            'club': {'write_only': True} 
         }
 
     def __init__(self, *args, **kwargs):
-        """
-        Serializer ইনিশিয়ালাইজ করার সময় owner-এর ক্লাবগুলো ফিল্টার করে।
-        """
+    
         super().__init__(*args, **kwargs)
         
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             owner = request.user
-            # 'club' ফিল্ডের queryset-কে ফিল্টার করে শুধুমাত্র লগইন করা মালিকের ক্লাবগুলো দেখানো হচ্ছে
+  
             self.fields['club'].queryset = ClubProfile.objects.filter(owner=owner)
-
-
-
-
-
-
-
-
-
 
 
 
@@ -227,3 +252,120 @@ class LegalContentSerializer(serializers.ModelSerializer):
         model = LegalContent
     
         fields = ['title', 'content', 'last_updated']
+
+
+
+
+
+
+# clubs/serializers.py
+from rest_framework import serializers
+from .models import ClubProfile, Review
+
+class ReviewSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField(read_only=True)  
+
+    class Meta:
+        model = Review
+        fields = ['id', 'Club', 'user', 'rating', 'text', 'image', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at', 'club']
+
+    def validate_rating(self, value):
+        if not (1 <= value <= 5):
+            raise serializers.ValidationError('Rating must be an integer between 1 and 5.')
+        return value
+
+class CreateReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = ['rating', 'text', 'image']
+
+
+
+
+
+"""************ For Custom User Authentication ************"""
+#=============================================================================
+#=============================================================================
+#===========================================================================
+
+
+
+from rest_framework import serializers
+from .models import User
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.http import urlsafe_base64_decode
+from django.utils.encoding import smart_str, force_str
+
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
+
+    class Meta:
+        model = User
+        fields = ['full_name', 'email', 'password', 'password2']
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password2']:
+            raise serializers.ValidationError({"password": "Password fields didn't match."})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('password2')
+        user = User.objects.create_user(**validated_data)
+        # is_active will be False by default as set in the model
+        return user
+
+class VerifyOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=4)
+
+class ResendOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+class UserLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(style={'input_type': 'password'})
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True)
+    confirm_new_password = serializers.CharField(required=True)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_new_password']:
+            raise serializers.ValidationError("New passwords must match.")
+        return data
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+class ResetPasswordSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, required=True)
+    confirm_password = serializers.CharField(write_only=True, required=True)
+
+    def validate(self, data):
+        if data['password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords must match.")
+        return data
+
+    def save(self):
+        # uidb64 and token are passed through context from the view
+        uidb64 = self.context.get('uidb64')
+        token = self.context.get('token')
+        password = self.validated_data['password']
+
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+
+        if user is not None and PasswordResetTokenGenerator().check_token(user, token):
+            user.set_password(password)
+            user.save()
+            return user
+        else:
+            raise serializers.ValidationError("Reset link is invalid or has expired.")

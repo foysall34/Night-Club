@@ -3,14 +3,27 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice, Event
+from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice, Event , Review
 
-# These registrations are correct and have been kept.
+
+
+
+admin.site.register(Review)
 admin.site.register(ClubType)
 admin.site.register(Event)
 admin.site.register(Vibes_Choice)
 admin.site.register(LegalContent)
-admin.site.register(ClubProfile)
+
+
+
+@admin.register(ClubProfile)
+class ClubProfileAdmin(admin.ModelAdmin):
+    list_display = ('id', 'owner', 'clubName' )
+
+
+
+
+
 
 @admin.register(ClubOwner)
 class ClubOwnerAdmin(admin.ModelAdmin):
@@ -19,6 +32,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
     """
     
     list_display = (
+        'id',
         'email', 
         'full_name', 
         'venue_name', 
@@ -31,7 +45,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Personal Information', {
-            # --- FIX: Removed 'username' from this line as it does not exist on the ClubOwner model. ---
+
             'fields': ('email', 'full_name', 'phone_number')
         }),
         ('Venue Information', {
@@ -46,10 +60,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
         ('Important Dates', {
             'fields': ('last_login', 'date_joined')
         }),
-        # You may want to add the groups and user_permissions fields here if you need to manage them
-        # ('Groups & Permissions', {
-        #     'fields': ('groups', 'user_permissions')
-        # })
+      
     )
     readonly_fields = ('last_login', 'date_joined')
 
@@ -59,10 +70,10 @@ class ClubOwnerAdmin(admin.ModelAdmin):
         Your custom email sending logic is preserved here.
         """
         if change and 'verification_status' in form.changed_data:
-            # Send an email only if the verification status has changed
+    
             
             if obj.verification_status == 'approved':
-                # Send approval email
+
                 subject = 'Your Club Registration Has Been Approved'
                 message = (
                     f'Dear {obj.full_name},\n\n'
@@ -80,7 +91,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
                 )
             
             elif obj.verification_status == 'rejected':
-                # Send rejection email
+   
                 subject = 'Your Club Registration Has Been Rejected'
                 message = (
                     f'Dear {obj.full_name},\n\n'
@@ -98,5 +109,57 @@ class ClubOwnerAdmin(admin.ModelAdmin):
                     fail_silently=False,
                 )
         
-        # It is crucial to call the super() method to save the object
+
         super().save_model(request, obj, form, change)
+
+
+
+
+
+
+
+
+
+# For Norma user admin.py 
+
+
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from .models import User, ClubOwner
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    """
+    Custom admin configuration for the regular User model.
+    """
+    # Fields to display in the list view
+    list_display = ('email', 'full_name', 'is_active', 'is_staff', 'date_joined')
+    
+    # Fields to filter by in the right sidebar
+    list_filter = ('is_active', 'is_staff', 'date_joined')
+    
+    # Fields to search by
+    search_fields = ('email', 'full_name')
+    
+    # Default ordering
+    ordering = ('-date_joined',)
+    
+    # Use fieldsets to organize the detail view form
+    # Note: We are replacing the default 'username' with 'email'
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Personal info', {'fields': ('full_name', 'phone_number')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+        ('OTP', {'fields': ('otp', 'otp_created_at')}),
+    )
+
+    # Fields to display when creating a new user
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'full_name', 'phone_number', 'password', 'password2'),
+        }),
+    )
+
+    # Make certain fields read-only
+    readonly_fields = ('last_login', 'date_joined', 'otp_created_at')

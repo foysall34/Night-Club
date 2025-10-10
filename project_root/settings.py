@@ -34,7 +34,7 @@ INSTALLED_APPS = [
     # app 
     'myapp' ,
     'owner',
-    'user_auth',
+  
 
     # framework 
     'rest_framework',
@@ -52,7 +52,7 @@ MIDDLEWARE = [
 
 
 AUTH_USER_MODEL = 'owner.ClubOwner'
-AUTH_USER_MODEL = 'user_auth.User'
+
 
 
 
@@ -156,6 +156,18 @@ USE_I18N = True
 
 USE_TZ = True
 
+
+
+import os
+from pathlib import Path
+
+# ... (আপনার অন্যান্য সেটিংস)
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# --- এই লাইনটি যোগ করুন ---
+# This folder will temporarily store files during the OTP verification process
+TEMP_MEDIA_ROOT = os.path.join(BASE_DIR, 'temp_media')
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/

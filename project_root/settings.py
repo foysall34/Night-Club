@@ -51,8 +51,11 @@ MIDDLEWARE = [
 ]
 
 
-AUTH_USER_MODEL = 'owner.ClubOwner'
+AUTH_USER_MODEL = 'owner.User'
 
+AUTHENTICATION_BACKENDS = [
+    'owner.backends.EmailBackend', 
+]
 
 
 
@@ -161,7 +164,6 @@ USE_TZ = True
 import os
 from pathlib import Path
 
-# ... (আপনার অন্যান্য সেটিংস)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

@@ -259,26 +259,12 @@ class LegalContentSerializer(serializers.ModelSerializer):
 
 
 # clubs/serializers.py
-from rest_framework import serializers
-from .models import ClubProfile, Review
+# from rest_framework import serializers
 
-class ReviewSerializer(serializers.ModelSerializer):
-    user = serializers.StringRelatedField(read_only=True)  
 
-    class Meta:
-        model = Review
-        fields = ['id', 'Club', 'user', 'rating', 'text', 'image', 'created_at']
-        read_only_fields = ['id', 'user', 'created_at', 'club']
 
-    def validate_rating(self, value):
-        if not (1 <= value <= 5):
-            raise serializers.ValidationError('Rating must be an integer between 1 and 5.')
-        return value
 
-class CreateReviewSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Review
-        fields = ['rating', 'text', 'image']
+# write your review here
 
 
 

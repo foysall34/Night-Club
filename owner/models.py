@@ -3,6 +3,9 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.conf import settings
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 
 # ==============================================================================
 # PART 1: CLUB OWNER MODELS
@@ -144,6 +147,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=False) #false by default
     date_joined = models.DateTimeField(default=timezone.now)
 
+
     groups = models.ManyToManyField(
         Group,
         verbose_name='groups',
@@ -159,7 +163,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         related_query_name="user",
     )
 
-    # --- Manager and Required Settings ---
+  
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
@@ -171,6 +175,27 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         verbose_name = 'User'
         verbose_name_plural = 'Users'
+
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+ 
+    music_preferences = models.JSONField(default=list, blank=True)
+    ideal_vibes = models.JSONField(default=list, blank=True)
+    crowd_atmosphere = models.JSONField(default=list, blank=True)
+    nights_out = models.IntegerField(
+        null=True, 
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(7)] 
+    )
+
+    def __str__(self):
+        return f"{self.user.email}'s Profile"
+
+
 
 # ==============================================================================
 # PART 3: CLUB AND EVENT MODELS
@@ -215,6 +240,7 @@ class ClubProfile(models.Model):
     practicalInfo = models.JSONField(default=dict)
     contact = models.JSONField(default=dict)
     weekly_hours = models.JSONField(default=get_default_weekly_hours)
+    reviews = models.JSONField(default=list) 
 
     def __str__(self):
         return self.clubName or f"Unnamed Club (ID: {self.id})"
@@ -222,24 +248,12 @@ class ClubProfile(models.Model):
 
 
 
-class Review(models.Model):
-    club = models.ForeignKey(ClubProfile, related_name='reviews', on_delete=models.CASCADE)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name='reviews'
-    )  # optional: track who posted
-    rating = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(5)]
-    )
-    text = models.TextField(blank=True, null=True)
-    image = models.ImageField(upload_to='reviews/%Y/%m/%d/', null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+#  write Your review code here 
 
-    class Meta:
-        ordering = ['-created_at']
 
-    def __str__(self):
-        return f"{self.club.clubName} — {self.rating}"
+
+
+
 
 class Event(models.Model):
     STATUS_CHOICES = (

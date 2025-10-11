@@ -3,12 +3,13 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice, Event , Review
+from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice, Event , UserProfile
 
 
 
 
-admin.site.register(Review)
+# admin.site.register(Review)
+admin.site.register(UserProfile)
 admin.site.register(ClubType)
 admin.site.register(Event)
 admin.site.register(Vibes_Choice)

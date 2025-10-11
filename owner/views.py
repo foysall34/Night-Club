@@ -448,40 +448,16 @@ class WeeklyHoursAPIView(APIView):
 
 
 # clubs/views.py
-from rest_framework import generics, permissions
-from django.shortcuts import get_object_or_404
-from .models import ClubProfile, Review
-from .serializers import ReviewSerializer, CreateReviewSerializer
 
-class ClubReviewListCreateView(generics.ListCreateAPIView):
-    """
-    GET: list reviews for a club
-    POST: create review for a club (rating required, text/image optional)
-    """
-    permission_classes = [permissions.IsAuthenticated]  # Allow any user (authenticated or not) to view reviews
-    serializer_class = ReviewSerializer
 
-    def get_queryset(self):
-        club_id = self.kwargs['club_id']
-        club = get_object_or_404(ClubProfile, id=club_id)
-        return club.reviews.all()
 
-    def get_serializer_class(self):
-        if self.request.method == 'POST':
-            return CreateReviewSerializer
-        return ReviewSerializer
-
-    def perform_create(self, serializer):
-        club = get_object_or_404(ClubProfile, id=self.kwargs['club_id'])
-        user = self.request.user if self.request.user.is_authenticated else None
-        serializer.save(club=club, user=user)
-
+# write your review here views here 
 
 
 #=========================================================================
 #=========================================================================
 #=========================================================================
-    """************ For Custom User Authentication ************"""
+"""************ For Custom User Authentication ************"""
 
 from rest_framework import generics, status
 from rest_framework.response import Response
@@ -581,18 +557,14 @@ class UserLoginAPIView(APIView):
 
             user = None
             user_type = None
-
             try:
                 user_candidate = User.objects.get(email=email)
 
                 if user_candidate.check_password(password):
                     user = user_candidate
                     user_type = 'user'
-            except User.DoesNotExist:
-             
+            except User.DoesNotExist:   
                 pass
-
-        
             if user is None:
                 try:
                     owner_candidate = ClubOwner.objects.get(email=email)
@@ -601,11 +573,8 @@ class UserLoginAPIView(APIView):
                         user = owner_candidate
                         user_type = 'owner'
                 except ClubOwner.DoesNotExist:
-          
                     pass
- 
             if user is not None:
-     
                 if not user.is_active:
 
                     return Response({
@@ -686,121 +655,245 @@ class UserResetPasswordAPIView(APIView):
 
 
 # api/views.py
-
-from rest_framework.views import APIView
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from django.conf import settings
-import requests
+@api_view(['POST']) 
+def get_place_details(request):
+    location = request.data.get('location', None) 
+    city = request.data.get('city', None)      
+  
 
+    if not location or not city:
+        error_message = {"error": "please provide both 'location' and 'city'."}
+        return Response(error_message, status=status.HTTP_400_BAD_REQUEST)
 
-class NearbyBarsView(APIView):
+    dummy_response = {
+        "name": "Smuggler's Cove",
+        "address": f"{location}, {city}",
+        "distance": "1.5 km",
+        "duration": "19 mins",
+        "rating": 4.7,
+        "short_description": "contemporary tiki bar with exotic cocktails & a fun, kitschy vibe.",
+        "hours": "Mon-Sun: 5 PM - 2 AM",
+        "vibes": "Tiki, Exotic, Fun",
+        "club_type": "Bar",
+        "price_range": "10$-50$",
+        "website": "https://www.smugglerscovesf.com"
+    }
 
-    def get(self, request):
-        try:
-
-            lat = request.query_params.get('lat')
-            lng = request.query_params.get('lng')
-            
-            radius = request.query_params.get('radius', 5000)
-
-            if not lat or not lng:
-                return Response(
-                    {"error": "Latitude (lat) and Longitude (lng) are required parameters."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            api_key = settings.GOOGLE_MAPS_API_KEY
-            
-            places_url = (
-                f"https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-                f"?location={lat},{lng}"
-                f"&radius={radius}"
-                f"&type=bar|night_club"
-                f"&key={api_key}"
-            )
-            
-            places_response = requests.get(places_url)
-            places_data = places_response.json()
-
-            if places_data['status'] != 'OK':
-                return Response(
-                    {"error": f"Google Places API error: {places_data.get('error_message', places_data['status'])}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-
-            bars = places_data.get('results', [])
-            if not bars:
-                return Response({"message": "No nearby bars or night clubs found."}, status=status.HTTP_200_OK)
-
-            destination_locations = '|'.join([
-                f"{bar['geometry']['location']['lat']},{bar['geometry']['location']['lng']}"
-                for bar in bars
-            ])
-
-            distance_url = (
-                f"https://maps.googleapis.com/maps/api/distancematrix/json"
-                f"?origins={lat},{lng}"
-                f"&destinations={destination_locations}"
-                f"&key={api_key}"
-            )
-            
-            distance_response = requests.get(distance_url)
-            distance_data = distance_response.json()
-
-            if distance_data['status'] != 'OK':
-                return Response(
-                    {"error": f"Google Distance Matrix API error: {distance_data.get('error_message', distance_data['status'])}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-
-            results = []
-            for i, bar in enumerate(bars):
-                distance_info = distance_data['rows'][0]['elements'][i]
-                
-                if distance_info['status'] == 'OK':
-                    results.append({
-                        "name": bar.get('name'),
-                        "address": bar.get('vicinity'),
-                        "distance": distance_info['distance']['text'],
-                        "duration": distance_info['duration']['text'],
-                        "rating": bar.get('rating', 'N/A'),
-                    })
-            
-            return Response(results, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return Response(dummy_response, status=status.HTTP_200_OK)
 
 
 
-class DummyNearbyBarsView(APIView):
-   
-    def get(self, request):
 
-        dummy_data = [
-            {
-                "name": "Smuggler's Cove",
-                "address": "650 Gough St, San Francisco",
-                "distance": "1.5 km",
-                "duration": "19 mins",
-                "rating": 4.7
-            },
-            {
-                "name": "Toronado",
-                "address": "547 Haight St, San Francisco",
-                "distance": "2.1 km",
-                "duration": "26 mins",
-                "rating": 4.6
-            },
-            {
-                "name": "The Old Fashioned",
-                "address": "23 N Pinckney St, Madison",
-                "distance": "5.3 km",
-                "duration": "12 mins",
-                "rating": 4.8
-            }
-        ]
+from rest_framework.decorators import api_view, permission_classes
+from django.shortcuts import get_object_or_404
+@api_view(['GET'])
+def get_owners_clubs(request, owner_id):
+    owner = get_object_or_404(ClubOwner, id=owner_id)
+    clubs = ClubProfile.objects.filter(owner=owner)
+    serializer = ClubProfileSerializer(clubs, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+# for reviews part 
+
+
+from rest_framework.decorators import api_view, permission_classes, parser_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import ClubProfile
+from datetime import datetime
+from django.core.files.storage import FileSystemStorage 
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser]) 
+def manage_club_reviews(request, club_id):
+    try:
+        club = ClubProfile.objects.get(id=club_id)
+    except ClubProfile.DoesNotExist:
+        return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND)
+
+  
+    if request.method == 'GET':
+        reviews_data = club.reviews
+        return Response(reviews_data, status=status.HTTP_200_OK)
+
+
+    elif request.method == 'POST':
+        rating = request.data.get('rating')
+        comment = request.data.get('comment', None) 
+        image = request.FILES.get('image', None)     
+
+
+        if not rating:
+            return Response({"error": "rating provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_url = None
+
+        if image:
+            fs = FileSystemStorage()
+          
+            filename = fs.save(image.name, image)
+
+            image_url = fs.url(filename)
         
 
-        return Response(dummy_data, status=status.HTTP_200_OK)
+        new_review = {
+            'success_msg' : 'Review added successfully',
+            'rating': rating,
+            'comment': comment,
+            'image_url': image_url, 
+            'timestamp': datetime.now().isoformat()
+        }
+        if not isinstance(club.reviews, list):
+            club.reviews = []
+    
+
+
+        club.reviews.append(new_review)
+        club.save()
+
+        return Response(new_review, status=status.HTTP_201_CREATED)
+    
+
+# For user music preference 
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from .models import User, ClubOwner, UserProfile 
+
+ALLOWED_MUSIC_GENRES = [
+    "Hip-Hop", "Rock", "EDM", "R & B", "Pop", "Jazz", "Country"
+]
+
+
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def manage_music_preferences(request):
+
+    if isinstance(request.user, ClubOwner):
+        return Response(
+            {"error": "This endpoint is only for regular users."},
+            status=status.HTTP_403_FORBIDDEN 
+        )
+
+
+    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
+
+
+    if request.method == 'GET':
+        data = {
+            'music_preferences': user_profile.music_preferences
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        preferences = request.data.get('music_preferences')
+
+        if not isinstance(preferences, list):
+            return Response(
+                {"error": "music_preferences must be a list."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+  
+        for genre in preferences:
+            if genre not in ALLOWED_MUSIC_GENRES:
+                return Response(
+                    {"error": f"'{genre}' is not a valid music genre."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        user_profile.music_preferences = preferences
+        user_profile.save()
+
+        return Response(
+            {"message": "Your music preferences have been updated successfully."},
+            status=status.HTTP_200_OK)
+
+
+ALLOWED_VIBES = [
+    "Rooftop Views", "Live Music", "High Energy", 
+    "karaoke bar", "Dive bar", "Sports bar"
+]
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def manage_ideal_vibes(request):
+    user_profile = request.user.profile
+
+    if request.method == 'GET':
+        return Response({'ideal_vibes': user_profile.ideal_vibes}, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        vibes = request.data.get('ideal_vibes')
+        if not isinstance(vibes, list):
+            return Response({"error": "ideal_vibes must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        for vibe in vibes:
+            if vibe not in ALLOWED_VIBES:
+                return Response({"error": f"'{vibe}' is not an allowed vibe."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_profile.ideal_vibes = vibes
+        user_profile.save()
+        return Response({"message": "Your preferred vibes have been saved successfully."}, status=status.HTTP_200_OK)
+
+
+
+ALLOWED_CROWDS = [
+    "College vibes", "Young Professionals", "Upscale & Exclusive",
+    "LGBTQ + Friendly", "Tourists & Travelers", "Date Night",
+    "Big Group", "Neighborhood Locals"
+]
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def manage_crowd_atmosphere(request):
+    user_profile = request.user.profile
+
+    if request.method == 'GET':
+        return Response({'crowd_atmosphere': user_profile.crowd_atmosphere}, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        crowds = request.data.get('crowd_atmosphere')
+        if not isinstance(crowds, list):
+            return Response({"error": "crowd_atmosphere must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        for crowd in crowds:
+            if crowd not in ALLOWED_CROWDS:
+                return Response({"error": f"'{crowd}' is not an allowed option."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_profile.crowd_atmosphere = crowds
+        user_profile.save()
+        return Response({"message": "Your preferred crowd atmosphere has been saved successfully."}, status=status.HTTP_200_OK)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def manage_nights_out(request):
+    user_profile = request.user.profile
+    
+    nights = request.data.get('nights_out')
+
+    # ভ্যালিডেশন
+    if nights is None:
+        return Response({"error": "nights_out mandatory"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        nights_int = int(nights)
+        if not (1 <= nights_int <= 7):
+            raise ValueError
+    except (ValueError, TypeError):
+        return Response({"error": "nights_out must be a number between 1 and 7."}, status=status.HTTP_400_BAD_REQUEST)
+
+    user_profile.nights_out = nights_int
+    user_profile.save()
+    return Response({"message": f"weekly nights out digit {nights_int} saved"}, status=status.HTTP_200_OK)

@@ -1,6 +1,7 @@
 # accounts/urls.py
 from django.urls import path
 from .views import *
+from . import views
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
@@ -34,7 +35,7 @@ urlpatterns = [
     path('owner/club-profile/weekly-hours/', WeeklyHoursAPIView.as_view(), name='club-profile-weekly-hours'),
     path('owner/events/', EventListCreateAPIView.as_view(), name='event-list-create'),
     path('owner/events/<int:pk>/', EventRetrieveUpdateDestroyAPIView.as_view(), name='event-detail'),
-    path('owner/clubs/<int:club_id>/reviews/', ClubReviewListCreateView.as_view(), name='club-reviews'),
+    # path('owner/clubs/<int:club_id>/reviews/', ClubReviewListCreateView.as_view(), name='club-reviews'),
 
 
 
@@ -70,6 +71,15 @@ urlpatterns = [
     path('user/change-password/', UserChangePasswordAPIView.as_view(), name='user-change-password'),
     path('user/forgot-password/', UserForgotPasswordAPIView.as_view(), name='user-forgot-password'),
     path('user/reset-password/<uidb64>/<token>/', UserResetPasswordAPIView.as_view(), name='user-reset-password'),
+    path('owners/<int:owner_id>/clubs/', views.get_owners_clubs, name='owner-clubs-list'),
+    path('user/places/', views.get_place_details, name='place-details'),
+    path('clubs/<int:club_id>/reviews/', manage_club_reviews, name='manage-club-reviews'),
+    path('profile/music-preferences/', manage_music_preferences, name='manage-music-preferences'),
+    path('profile/ideal-vibes/', manage_ideal_vibes, name='manage-ideal-vibes'),
+    path('profile/crowd-atmosphere/', manage_crowd_atmosphere, name='manage-crowd-atmosphere'),
+    path('profile/nights-out/', manage_nights_out, name='manage-nights-out'),
+
+
 
 
 

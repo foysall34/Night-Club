@@ -52,7 +52,10 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
     phone_number = models.CharField(max_length=20)
     venue_name = models.CharField(max_length=255)
     venue_address = models.CharField(max_length=255)
+    venue_city = models.CharField(max_length=100 , default='write city')
     link = models.CharField(max_length=300, default='link', blank=True, null=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
 
     # --- Verification Documents ---
     profile_image = models.FileField(upload_to='proofs/images/')

@@ -1,8 +1,7 @@
 # accounts/serializers.py
 from rest_framework import serializers
-
-# শুধুমাত্র ডেটা ভ্যালিডেশনের জন্য
-# serializers.py
+from geopy.geocoders import Nominatim 
+from geopy.exc import GeocoderTimedOut, GeocoderUnavailable 
 
 from rest_framework import serializers
 
@@ -13,6 +12,7 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
     phone_number = serializers.CharField(required=True)
     venue_name = serializers.CharField(required=True)
     venue_address = serializers.CharField(required=True)
+    venue_city = serializers.CharField(required=True)
     profile_image = serializers.FileField(required=True)
     id_front_page = serializers.FileField(required=True)
     id_back_page = serializers.FileField(required=True)
@@ -27,14 +27,37 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
             raise serializers.ValidationError("A user with this email address already exists.")
         return value
 
-
+    def create(self, validated_data):
+        """
+        Create and return a new ClubOwner instance, with geocoded lat/lon.
+        """
+     
+        geolocator = Nominatim(user_agent="owner") 
+        full_address = f"{validated_data['venue_address']}, {validated_data['venue_city']}"
+        
+        lat = None
+        lon = None
+        try:
+            location = geolocator.geocode(full_address, timeout=10) 
+            if location:
+                lat = location.latitude
+                lon = location.longitude
+                print(f"Coordinates found for {full_address}: ({lat}, {lon})")
+            else:
+                print(f"Could not find coordinates for: {full_address}")
+        except (GeocoderTimedOut, GeocoderUnavailable) as e:
+  
+            print(f"Geocoding service error: {e}")
+        except Exception as e:
+          
+            print(f"An unexpected error occurred during geocoding: {e}")
 
 
     def create(self, validated_data):
         """
         Create and return a new ClubOwner instance, given the validated data.
         """
-        # Use the custom manager's create_user method to ensure password hashing
+     
         user = ClubOwner.objects.create_user(
             email=validated_data['email'],
             full_name=validated_data['full_name'],
@@ -42,14 +65,17 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
             phone_number=validated_data['phone_number'],
             venue_name=validated_data['venue_name'],
             venue_address=validated_data['venue_address'],
+            venue_city=validated_data['venue_city'],
             profile_image=validated_data['profile_image'],
             id_front_page=validated_data['id_front_page'],
             id_back_page=validated_data['id_back_page'],
-            link=validated_data.get('link', '')
+            link=validated_data.get('link', ''),
+            latitude=lat,    
+            longitude=lon  ,
         )
         return user
 
-# --- এই নতুন ক্লাসটি যোগ করুন ---
+
 class OwnerVerifyOTPSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     otp = serializers.CharField(required=True, max_length=4)

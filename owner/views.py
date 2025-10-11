@@ -679,6 +679,8 @@ def get_place_details(request):
         "vibes": "Tiki, Exotic, Fun",
         "club_type": "Bar",
         "price_range": "10$-50$",
+        "latitude": 37.769,
+        "longitude": -122.446,
         "website": "https://www.smugglerscovesf.com"
     }
 
@@ -883,7 +885,6 @@ def manage_nights_out(request):
     
     nights = request.data.get('nights_out')
 
-    # ভ্যালিডেশন
     if nights is None:
         return Response({"error": "nights_out mandatory"}, status=status.HTTP_400_BAD_REQUEST)
     

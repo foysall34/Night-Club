@@ -48,10 +48,11 @@ class OwnerRegisterView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
+        print(serializer)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # Generate and send OTP
+        
         otp = str(random.randint(1000, 9999))
         user.otp = otp
         user.otp_created_at = timezone.now()
@@ -768,11 +769,7 @@ def manage_club_reviews(request, club_id):
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from .models import User, ClubOwner, UserProfile 
-
-ALLOWED_MUSIC_GENRES = [
-    "Hip-Hop", "Rock", "EDM", "R & B", "Pop", "Jazz", "Country"
-]
+from .models import User, ClubOwner, UserProfile , MusicGenre , Vibe ,CrowdAtmosphere
 
 
 
@@ -787,94 +784,133 @@ def manage_music_preferences(request):
             status=status.HTTP_403_FORBIDDEN 
         )
 
-
     user_profile, created = UserProfile.objects.get_or_create(user=request.user)
 
-
     if request.method == 'GET':
+      
+        preferences = user_profile.music_preferences.values_list('name', flat=True)
         data = {
-            'music_preferences': user_profile.music_preferences
+            'music_preferences': list(preferences)
         }
         return Response(data, status=status.HTTP_200_OK)
 
-    elif request.method == 'POST':
-        preferences = request.data.get('music_preferences')
 
-        if not isinstance(preferences, list):
+    elif request.method == 'POST':
+        preference_names = request.data.get('music_preferences')
+
+        if not isinstance(preference_names, list):
             return Response(
                 {"error": "music_preferences must be a list."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
   
-        for genre in preferences:
-            if genre not in ALLOWED_MUSIC_GENRES:
+        all_allowed_genres = set(MusicGenre.objects.values_list('name', flat=True))
+
+  
+        for genre_name in preference_names:
+            if genre_name not in all_allowed_genres:
                 return Response(
-                    {"error": f"'{genre}' is not a valid music genre."},
+                    {"error": f"'{genre_name}' is not a valid music genre."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        
-        user_profile.music_preferences = preferences
-        user_profile.save()
+
+        genres_to_set = MusicGenre.objects.filter(name__in=preference_names)
+
+
+        user_profile.music_preferences.set(genres_to_set)
 
         return Response(
             {"message": "Your music preferences have been updated successfully."},
             status=status.HTTP_200_OK)
 
 
-ALLOWED_VIBES = [
-    "Rooftop Views", "Live Music", "High Energy", 
-    "karaoke bar", "Dive bar", "Sports bar"
-]
+
+
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def manage_ideal_vibes(request):
+
     user_profile = request.user.profile
 
+
     if request.method == 'GET':
-        return Response({'ideal_vibes': user_profile.ideal_vibes}, status=status.HTTP_200_OK)
+    
+        vibes = user_profile.ideal_vibes.values_list('name', flat=True)
+        return Response({'ideal_vibes': list(vibes)}, status=status.HTTP_200_OK)
+
 
     elif request.method == 'POST':
-        vibes = request.data.get('ideal_vibes')
-        if not isinstance(vibes, list):
+        vibe_names = request.data.get('ideal_vibes')
+
+        if not isinstance(vibe_names, list):
             return Response({"error": "ideal_vibes must be a list."}, status=status.HTTP_400_BAD_REQUEST)
         
-        for vibe in vibes:
-            if vibe not in ALLOWED_VIBES:
-                return Response({"error": f"'{vibe}' is not an allowed vibe."}, status=status.HTTP_400_BAD_REQUEST)
 
-        user_profile.ideal_vibes = vibes
-        user_profile.save()
+        all_allowed_vibes = set(Vibe.objects.values_list('name', flat=True))
+
+
+        for vibe_name in vibe_names:
+            if vibe_name not in all_allowed_vibes:
+                return Response({"error": f"'{vibe_name}' is not an allowed vibe."}, status=status.HTTP_400_BAD_REQUEST)
+
+   
+        vibes_to_set = Vibe.objects.filter(name__in=vibe_names)
+
+ 
+        user_profile.ideal_vibes.set(vibes_to_set)
+        
         return Response({"message": "Your preferred vibes have been saved successfully."}, status=status.HTTP_200_OK)
 
-
-
-ALLOWED_CROWDS = [
-    "College vibes", "Young Professionals", "Upscale & Exclusive",
-    "LGBTQ + Friendly", "Tourists & Travelers", "Date Night",
-    "Big Group", "Neighborhood Locals"
-]
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def manage_crowd_atmosphere(request):
+
     user_profile = request.user.profile
 
+
     if request.method == 'GET':
-        return Response({'crowd_atmosphere': user_profile.crowd_atmosphere}, status=status.HTTP_200_OK)
+      
+        crowds = user_profile.crowd_atmosphere.values_list('name', flat=True)
+        return Response({'crowd_atmosphere': list(crowds)}, status=status.HTTP_200_OK)
+
 
     elif request.method == 'POST':
-        crowds = request.data.get('crowd_atmosphere')
-        if not isinstance(crowds, list):
+        crowd_names = request.data.get('crowd_atmosphere')
+
+        if not isinstance(crowd_names, list):
             return Response({"error": "crowd_atmosphere must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+        
 
-        for crowd in crowds:
-            if crowd not in ALLOWED_CROWDS:
-                return Response({"error": f"'{crowd}' is not an allowed option."}, status=status.HTTP_400_BAD_REQUEST)
+        all_allowed_crowds = set(CrowdAtmosphere.objects.values_list('name', flat=True))
 
-        user_profile.crowd_atmosphere = crowds
-        user_profile.save()
+
+        for crowd_name in crowd_names:
+            if crowd_name not in all_allowed_crowds:
+                return Response({"error": f"'{crowd_name}' is not an allowed option."}, status=status.HTTP_400_BAD_REQUEST)
+
+  
+        crowds_to_set = CrowdAtmosphere.objects.filter(name__in=crowd_names)
+
+
+        user_profile.crowd_atmosphere.set(crowds_to_set)
+        
         return Response({"message": "Your preferred crowd atmosphere has been saved successfully."}, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -898,3 +934,68 @@ def manage_nights_out(request):
     user_profile.nights_out = nights_int
     user_profile.save()
     return Response({"message": f"weekly nights out digit {nights_int} saved"}, status=status.HTTP_200_OK)
+
+
+
+
+#=========================================================================
+# for follow & followres 
+# your_app/views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from .models import User
+from .serializers import UserFollowSerializer
+
+class FollowToggleView(APIView):
+ 
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, user_id, *args, **kwargs):
+        user_to_toggle = get_object_or_404(User, id=user_id)
+        current_user = request.user
+
+        if user_to_toggle == current_user:
+            return Response({'error': 'You cannot follow yourself.'}, status=status.HTTP_400_BAD_REQUEST)
+
+  
+        if current_user.following.filter(id=user_to_toggle.id).exists():
+            current_user.following.remove(user_to_toggle)
+            message = f'You have unfollowed {user_to_toggle.full_name}.'
+            return Response({'message': message, 'action': 'unfollowed'}, status=status.HTTP_200_OK)
+    
+        else:
+            current_user.following.add(user_to_toggle)
+            message = f'You are now following {user_to_toggle.full_name}.'
+            return Response({'message': message, 'action': 'followed'}, status=status.HTTP_200_OK)
+
+
+class FollowingPageView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, *args, **kwargs):
+        current_user = request.user
+        following_users = current_user.following.all()
+        my_follower_ids = current_user.followers.values_list('id', flat=True)
+        my_following_ids = current_user.following.values_list('id', flat=True)
+
+        follow_back_users = User.objects.filter(id__in=my_follower_ids).exclude(id__in=my_following_ids)
+
+     
+        exclude_ids = list(my_following_ids) + list(follow_back_users.values_list('id', flat=True)) + [current_user.id]
+        other_suggestions = User.objects.exclude(id__in=exclude_ids)[:10]
+
+       
+        suggested_users = list(follow_back_users) + list(other_suggestions)
+
+        serializer_context = {'request': request}
+        following_serializer = UserFollowSerializer(following_users, many=True, context=serializer_context)
+        suggestions_serializer = UserFollowSerializer(suggested_users, many=True, context=serializer_context)
+
+        response_data = {
+            'following': following_serializer.data,
+            'suggestions': suggestions_serializer.data,
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)

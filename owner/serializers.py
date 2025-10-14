@@ -5,6 +5,7 @@ from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
 
 from rest_framework import serializers
 
+
 class ClubOwnerRegistrationSerializer(serializers.Serializer):
     full_name = serializers.CharField(required=True)
     email = serializers.EmailField(required=True)
@@ -18,7 +19,6 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
     id_back_page = serializers.FileField(required=True)
     link = serializers.CharField(required=False, allow_blank=True, default='')
 
-
     def validate_email(self, value):
         """
         Check that the email is not already in use.
@@ -27,14 +27,16 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
             raise serializers.ValidationError("A user with this email address already exists.")
         return value
 
+
     def create(self, validated_data):
         """
         Create and return a new ClubOwner instance, with geocoded lat/lon.
         """
-     
-        geolocator = Nominatim(user_agent="owner") 
+ 
+        geolocator = Nominatim(user_agent="your_unique_app_name") 
         full_address = f"{validated_data['venue_address']}, {validated_data['venue_city']}"
         
+       
         lat = None
         lon = None
         try:
@@ -42,22 +44,16 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
             if location:
                 lat = location.latitude
                 lon = location.longitude
+                
                 print(f"Coordinates found for {full_address}: ({lat}, {lon})")
             else:
                 print(f"Could not find coordinates for: {full_address}")
         except (GeocoderTimedOut, GeocoderUnavailable) as e:
-  
             print(f"Geocoding service error: {e}")
         except Exception as e:
-          
             print(f"An unexpected error occurred during geocoding: {e}")
 
-
-    def create(self, validated_data):
-        """
-        Create and return a new ClubOwner instance, given the validated data.
-        """
-     
+       
         user = ClubOwner.objects.create_user(
             email=validated_data['email'],
             full_name=validated_data['full_name'],
@@ -70,11 +66,11 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
             id_front_page=validated_data['id_front_page'],
             id_back_page=validated_data['id_back_page'],
             link=validated_data.get('link', ''),
-            latitude=lat,    
-            longitude=lon  ,
+            latitude=lat,  
+            longitude=lon  
         )
+        print(user.latitude, user.longitude)
         return user
-
 
 class OwnerVerifyOTPSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
@@ -381,3 +377,43 @@ class ResetPasswordSerializer(serializers.Serializer):
             return user
         else:
             raise serializers.ValidationError("Reset link is invalid or has expired.")
+        
+
+
+#=============================================================================
+#=============================================================================
+#===========================================================================
+# for follow  & follwers
+# your_app/serializers.py
+from rest_framework import serializers
+from .models import User
+
+class UserFollowSerializer(serializers.ModelSerializer):
+
+
+    follow_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'full_name', 'email', 'follow_status'] 
+
+    def get_follow_status(self, obj):
+     
+        request_user = self.context.get('request').user
+        if not request_user.is_authenticated or request_user == obj:
+            return None 
+
+       
+        is_following = request_user.following.filter(pk=obj.pk).exists()
+
+        is_followed_by = request_user.followers.filter(pk=obj.pk).exists()
+
+        if is_following:
+   
+            return 'unfollow'
+        elif is_followed_by:
+        
+            return 'follow_back'
+        else:
+            
+            return 'follow'

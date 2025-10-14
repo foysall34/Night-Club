@@ -149,7 +149,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False) #false
     is_active = models.BooleanField(default=False) #false by default
     date_joined = models.DateTimeField(default=timezone.now)
+    
 
+
+ 
+    following = models.ManyToManyField(
+        'self',
+        through='Follow',  
+        related_name='followers',
+        symmetrical=False
+    )
 
     groups = models.ManyToManyField(
         Group,
@@ -178,6 +187,99 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         verbose_name = 'User'
         verbose_name_plural = 'Users'
+
+
+class MusicGenre(models.Model):
+    name = models.CharField(max_length=100,unique=True,verbose_name="Genre Name",help_text="Enter a music genre (e.g., Rock, Pop, Jazz)")
+    class Meta:
+        verbose_name = "Music Genre"
+        verbose_name_plural = "Music Genres"
+        ordering = ['name']
+
+    def __str__(self):
+         return self.name
+
+
+
+class Vibe(models.Model):
+    name = models.CharField(
+        max_length=100,
+        unique=True, 
+        verbose_name="Vibe Name",
+        help_text="Enter a vibe (e.g., Rooftop Views, Live Music)"
+    )
+    class Meta:
+        verbose_name = "Vibe"
+        verbose_name_plural = "Vibes"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class CrowdAtmosphere(models.Model):
+
+    name = models.CharField(
+        max_length=100,
+        unique=True, 
+        verbose_name="Crowd Atmosphere",
+        help_text="Enter a crowd atmosphere (e.g., College vibes, Date Night)"
+    )
+
+    class Meta:
+        verbose_name = "USER Crowd Atmosphere"
+        verbose_name_plural = "Crowd Atmospheres"
+        ordering = ['name'] 
+
+    def __str__(self):
+        return self.name
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    music_preferences = models.ManyToManyField(MusicGenre,blank=True,related_name='user_profiles',help_text="The user's preferred music genres.")
+    ideal_vibes = models.ManyToManyField(
+        Vibe,
+        blank=True,
+        related_name='user_profiles_vibes',
+        help_text="The user's preferred ideal vibes."
+
+    )
+    crowd_atmosphere = models.ManyToManyField(
+        CrowdAtmosphere,
+        blank=True,
+        related_name='user_profiles_crowds', 
+        help_text="The user's preferred crowd atmosphere."
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class Follow(models.Model):
+   
+    from_user = models.ForeignKey(User, related_name='following_relationships', on_delete=models.CASCADE)
+    to_user = models.ForeignKey(User, related_name='follower_relationships', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+      
+        constraints = [
+            models.UniqueConstraint(fields=['from_user', 'to_user'], name='unique_follow')
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.from_user.email} follows {self.to_user.email}'
 
 
 

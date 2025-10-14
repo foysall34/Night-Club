@@ -78,6 +78,9 @@ urlpatterns = [
     path('profile/ideal-vibes/', manage_ideal_vibes, name='manage-ideal-vibes'),
     path('profile/crowd-atmosphere/', manage_crowd_atmosphere, name='manage-crowd-atmosphere'),
     path('profile/nights-out/', manage_nights_out, name='manage-nights-out'),
+    path('following/', FollowingPageView.as_view(), name='following-page'),
+    path('users/<int:user_id>/toggle-follow/', FollowToggleView.as_view(), name='toggle-follow'),
+
 
 
 

@@ -417,3 +417,108 @@ class UserFollowSerializer(serializers.ModelSerializer):
         else:
             
             return 'follow'
+        
+
+
+
+#=========================================================================================
+#=========================================================================================
+#=========================================================================================
+# For recomendation data 
+#=========================================================================================
+from rest_framework import serializers
+from geopy.geocoders import Nominatim
+from .models import UserProfile, MusicGenre, Vibe, CrowdAtmosphere
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(source='user.full_name', read_only=True)
+    music_preferences = serializers.SlugRelatedField(
+        many=True,
+        slug_field='name',
+        queryset=MusicGenre.objects.all()
+    )
+    ideal_vibes = serializers.SlugRelatedField(
+        many=True,
+        slug_field='name',
+        queryset=Vibe.objects.all()
+    )
+    crowd_atmosphere = serializers.SlugRelatedField(
+        many=True,
+        slug_field='name',
+        queryset=CrowdAtmosphere.objects.all()
+    )
+
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, read_only=True)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, read_only=True)
+
+    class Meta:
+        model = UserProfile
+       
+        fields = [
+            'id',
+            'full_name',
+            'city', 
+            'latitude', 
+            'longitude', 
+            'music_preferences', 
+            'ideal_vibes', 
+            'crowd_atmosphere'
+        ]
+        read_only_fields = ['user']
+
+    def _get_location_from_city(self, city):
+        """helper function to get lat/lon from city name"""
+        try:
+         
+            geolocator = Nominatim(user_agent="nightclub_app")
+            location = geolocator.geocode(city)
+            if location:
+                return location.latitude, location.longitude
+        except Exception as e:
+          
+            print(f"Geocoding error: {e}")
+        return None, None
+
+    def create(self, validated_data):
+
+        city = validated_data.get('city')
+        if city:
+            lat, lon = self._get_location_from_city(city)
+            validated_data['latitude'] = lat
+            validated_data['longitude'] = lon
+        
+
+        music_data = validated_data.pop('music_preferences', [])
+        vibes_data = validated_data.pop('ideal_vibes', [])
+        crowds_data = validated_data.pop('crowd_atmosphere', [])
+
+        profile = UserProfile.objects.create(**validated_data)
+
+        profile.music_preferences.set(music_data)
+        profile.ideal_vibes.set(vibes_data)
+        profile.crowd_atmosphere.set(crowds_data)
+
+        return profile
+
+    def update(self, instance, validated_data):
+     
+        city = validated_data.get('city', instance.city)
+    
+        if 'city' in validated_data and instance.city != city:
+            lat, lon = self._get_location_from_city(city)
+            instance.latitude = lat
+            instance.longitude = lon
+        
+        instance.city = city
+        
+     
+        if 'music_preferences' in validated_data:
+            instance.music_preferences.set(validated_data.get('music_preferences', []))
+        if 'ideal_vibes' in validated_data:
+            instance.ideal_vibes.set(validated_data.get('ideal_vibes', []))
+        if 'crowd_atmosphere' in validated_data:
+            instance.crowd_atmosphere.set(validated_data.get('crowd_atmosphere', []))
+        
+        instance.save()
+        return instance

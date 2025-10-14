@@ -80,6 +80,8 @@ urlpatterns = [
     path('profile/nights-out/', manage_nights_out, name='manage-nights-out'),
     path('following/', FollowingPageView.as_view(), name='following-page'),
     path('users/<int:user_id>/toggle-follow/', FollowToggleView.as_view(), name='toggle-follow'),
+    path('profile/', UserProfileView.as_view(), name='user-profile'),
+
 
 
 

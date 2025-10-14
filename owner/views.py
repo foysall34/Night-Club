@@ -832,15 +832,23 @@ def manage_music_preferences(request):
 @permission_classes([IsAuthenticated])
 def manage_ideal_vibes(request):
 
-    user_profile = request.user.profile
+    if isinstance(request.user, ClubOwner):
+        return Response(
+            {"error": "This endpoint is only for regular users."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
+    
+   
 
 
     if request.method == 'GET':
-    
+
         vibes = user_profile.ideal_vibes.values_list('name', flat=True)
         return Response({'ideal_vibes': list(vibes)}, status=status.HTTP_200_OK)
 
-
+ 
     elif request.method == 'POST':
         vibe_names = request.data.get('ideal_vibes')
 
@@ -850,15 +858,14 @@ def manage_ideal_vibes(request):
 
         all_allowed_vibes = set(Vibe.objects.values_list('name', flat=True))
 
-
+ 
         for vibe_name in vibe_names:
             if vibe_name not in all_allowed_vibes:
                 return Response({"error": f"'{vibe_name}' is not an allowed vibe."}, status=status.HTTP_400_BAD_REQUEST)
 
-   
+ 
         vibes_to_set = Vibe.objects.filter(name__in=vibe_names)
 
- 
         user_profile.ideal_vibes.set(vibes_to_set)
         
         return Response({"message": "Your preferred vibes have been saved successfully."}, status=status.HTTP_200_OK)
@@ -868,17 +875,22 @@ def manage_ideal_vibes(request):
 @permission_classes([IsAuthenticated])
 def manage_crowd_atmosphere(request):
 
-    user_profile = request.user.profile
-
+    if isinstance(request.user, ClubOwner):
+        return Response(
+            {"error": "This endpoint is only for regular users."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
 
     if request.method == 'GET':
-      
+
         crowds = user_profile.crowd_atmosphere.values_list('name', flat=True)
         return Response({'crowd_atmosphere': list(crowds)}, status=status.HTTP_200_OK)
 
 
     elif request.method == 'POST':
         crowd_names = request.data.get('crowd_atmosphere')
+
 
         if not isinstance(crowd_names, list):
             return Response({"error": "crowd_atmosphere must be a list."}, status=status.HTTP_400_BAD_REQUEST)
@@ -894,7 +906,7 @@ def manage_crowd_atmosphere(request):
   
         crowds_to_set = CrowdAtmosphere.objects.filter(name__in=crowd_names)
 
-
+      
         user_profile.crowd_atmosphere.set(crowds_to_set)
         
         return Response({"message": "Your preferred crowd atmosphere has been saved successfully."}, status=status.HTTP_200_OK)
@@ -999,3 +1011,37 @@ class FollowingPageView(APIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+    
+
+
+
+
+
+# For Recomendation veiws 
+
+
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+from .models import UserProfile
+from .serializers import UserProfileSerializer
+
+class UserProfileView(generics.RetrieveUpdateAPIView):
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        profile, created = UserProfile.objects.get_or_create(user=self.request.user)
+        return profile
+    
+ 
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        
+     
+        import json
+        print(json.dumps(serializer.data, indent=4))
+        
+
+        return Response(serializer.data)

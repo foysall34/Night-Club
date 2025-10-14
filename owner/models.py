@@ -238,23 +238,16 @@ class CrowdAtmosphere(models.Model):
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     music_preferences = models.ManyToManyField(MusicGenre,blank=True,related_name='user_profiles',help_text="The user's preferred music genres.")
-    ideal_vibes = models.ManyToManyField(
-        Vibe,
-        blank=True,
-        related_name='user_profiles_vibes',
-        help_text="The user's preferred ideal vibes."
-
-    )
-    crowd_atmosphere = models.ManyToManyField(
-        CrowdAtmosphere,
-        blank=True,
-        related_name='user_profiles_crowds', 
-        help_text="The user's preferred crowd atmosphere."
-    )
+    city = models.CharField(max_length=200 , default='write city')
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    ideal_vibes = models.ManyToManyField(Vibe,blank=True,related_name='user_profiles_vibes',help_text="The user's preferred ideal vibes.")
+    crowd_atmosphere = models.ManyToManyField(CrowdAtmosphere,blank=True,related_name='user_profiles_crowds', help_text="The user's preferred crowd atmosphere.")
 
 
-
-
+    def __str__(self):
+        return self.user.email
+    
 
 
 
@@ -283,22 +276,7 @@ class Follow(models.Model):
 
 
 
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
- 
-    music_preferences = models.JSONField(default=list, blank=True)
-    ideal_vibes = models.JSONField(default=list, blank=True)
-    crowd_atmosphere = models.JSONField(default=list, blank=True)
-    nights_out = models.IntegerField(
-        null=True, 
-        blank=True,
-        validators=[MinValueValidator(1), MaxValueValidator(7)] 
-    )
 
-    def __str__(self):
-        return f"{self.user.email}'s Profile"
 
 
 

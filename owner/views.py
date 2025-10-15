@@ -1032,16 +1032,122 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         profile, created = UserProfile.objects.get_or_create(user=self.request.user)
         return profile
-    
- 
-
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
-        
-     
         import json
         print(json.dumps(serializer.data, indent=4))
-        
-
         return Response(serializer.data)
+    
+
+
+from rest_framework import generics, permissions
+from .models import ClubProfile
+from .serializers import ClubDetailSerializer
+import json
+class ClubDetailView(generics.RetrieveAPIView):
+  
+    queryset = ClubProfile.objects.select_related('owner').all()
+    serializer_class = ClubDetailSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def retrieve(self, request, *args, **kwargs):
+      
+     
+        instance = self.get_object() 
+        
+        
+        serializer = self.get_serializer(instance)
+        
+ 
+        print("--- Club Detail Data ---")
+
+        print(json.dumps(serializer.data, indent=4))
+        print("------------------------")
+      
+
+  
+        return Response(serializer.data)
+    
+
+#************************************************************************************************
+# Final Recommedation api 
+# views.py
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from owner.models import ClubProfile, UserProfile
+from owner.serializers import ClubProfileSerializer
+from math import radians, sin, cos, sqrt, atan2
+
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    R = 6371  
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat/2)**2 + cos(lat1)*cos(lat2)*sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    return R * c
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def recommend_clubs(request):
+    user = request.user
+    try:
+        profile = UserProfile.objects.get(user=user)
+    except UserProfile.DoesNotExist:
+        return Response({"error": "User profile not found"}, status=404)
+
+    try:
+        user_lat = float(profile.latitude)
+        user_lon = float(profile.longitude)
+    except (TypeError, ValueError):
+        return Response({"error": "User location missing"}, status=400)
+
+    # User preferences
+    user_music = set([str(x) for x in profile.music_preferences.all()])
+    user_vibes = set([str(x) for x in profile.ideal_vibes.all()])
+    user_crowd = set([str(x) for x in profile.crowd_atmosphere.all()])
+
+    clubs = ClubProfile.objects.select_related('owner').all()
+    recommendations = []
+
+    for club in clubs:
+        owner = club.owner
+        if not owner or owner.latitude is None or owner.longitude is None:
+            continue
+
+        distance = calculate_distance(user_lat, user_lon, float(owner.latitude), float(owner.longitude))
+        if distance > 30:
+            continue  # skip clubs beyond 30 km
+
+        # Extract club tastes from JSON fields
+        club_music = set(club.features.get('music_preferences', []))
+        club_vibes = set(club.events.get('ideal_vibes', []))
+        club_crowd = set(club.crowd_atmosphere.get('crowd&atmosphere', []))
+
+        # Calculate matches
+        music_match = len(user_music.intersection(club_music))
+        vibes_match = len(user_vibes.intersection(club_vibes))
+        crowd_match = len(user_crowd.intersection(club_crowd))
+
+        total_match = music_match + vibes_match + crowd_match
+
+        if total_match > 0:
+            recommendations.append({
+                "club": ClubProfileSerializer(club).data,
+                "distance_km": round(distance, 2),
+                "music_match": music_match,
+                "vibes_match": vibes_match,
+                "crowd_match": crowd_match,
+                "total_match": total_match,
+            })
+
+    # Sort by total_match descending, distance ascending
+    sorted_recommendations = sorted(recommendations, key=lambda x: (-x['total_match'], x['distance_km']))
+
+    return Response({
+        "count": len(sorted_recommendations),
+        "results": sorted_recommendations[:5]  # Top 5 clubs
+    })

@@ -37,7 +37,7 @@ class ClubProfileAdmin(admin.ModelAdmin):
 @admin.register(ClubOwner)
 class ClubOwnerAdmin(admin.ModelAdmin):
    
-    list_display = ( 'id', 'email', 'full_name', 'venue_name', 'venue_city' ,'verification_status', 'is_active')
+    list_display = ( 'id', 'email', 'full_name', 'venue_name', 'venue_city' , 'verification_status', 'is_active')
     list_filter = ('verification_status', 'is_active', 'date_joined')
     search_fields = ('email', 'full_name', 'venue_name')
     ordering = ('-date_joined',)
@@ -63,8 +63,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
 
     )
 
-    # যে ফিল্ডগুলো শুধুমাত্র পড়া যাবে, এডিট করা যাবে না
-    readonly_fields = ('last_login', 'date_joined', 'latitude', 'longitude')
+    readonly_fields = ('last_login', 'date_joined')
 
     def save_model(self, request, obj, form, change):
         

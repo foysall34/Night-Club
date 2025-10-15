@@ -237,10 +237,10 @@ class CrowdAtmosphere(models.Model):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    music_preferences = models.ManyToManyField(MusicGenre,blank=True,related_name='user_profiles',help_text="The user's preferred music genres.")
     city = models.CharField(max_length=200 , default='write city')
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    music_preferences = models.ManyToManyField(MusicGenre,blank=True,related_name='user_profiles',help_text="The user's preferred music genres.")
     ideal_vibes = models.ManyToManyField(Vibe,blank=True,related_name='user_profiles_vibes',help_text="The user's preferred ideal vibes.")
     crowd_atmosphere = models.ManyToManyField(CrowdAtmosphere,blank=True,related_name='user_profiles_crowds', help_text="The user's preferred crowd atmosphere.")
 
@@ -317,11 +317,9 @@ class ClubProfile(models.Model):
     ageRequirement = models.CharField(max_length=100, blank=True)
     coverCharge = models.CharField(max_length=255, blank=True)
     clubImageUrl = models.ImageField(upload_to='clubs/images/', max_length=500, blank=True, null=True)
-    
     features = models.JSONField(default=dict)
     events = models.JSONField(default=dict)
-    practicalInfo = models.JSONField(default=dict)
-    contact = models.JSONField(default=dict)
+    crowd_atmosphere = models.JSONField(default=dict)
     weekly_hours = models.JSONField(default=get_default_weekly_hours)
     reviews = models.JSONField(default=list) 
 

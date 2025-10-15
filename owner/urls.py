@@ -35,6 +35,8 @@ urlpatterns = [
     path('owner/club-profile/weekly-hours/', WeeklyHoursAPIView.as_view(), name='club-profile-weekly-hours'),
     path('owner/events/', EventListCreateAPIView.as_view(), name='event-list-create'),
     path('owner/events/<int:pk>/', EventRetrieveUpdateDestroyAPIView.as_view(), name='event-detail'),
+    path('club-recomend-info/<int:pk>/', ClubDetailView.as_view(), name='club-detail'),
+
     # path('owner/clubs/<int:club_id>/reviews/', ClubReviewListCreateView.as_view(), name='club-reviews'),
 
 
@@ -71,7 +73,7 @@ urlpatterns = [
     path('user/change-password/', UserChangePasswordAPIView.as_view(), name='user-change-password'),
     path('user/forgot-password/', UserForgotPasswordAPIView.as_view(), name='user-forgot-password'),
     path('user/reset-password/<uidb64>/<token>/', UserResetPasswordAPIView.as_view(), name='user-reset-password'),
-    path('owners/<int:owner_id>/clubs/', views.get_owners_clubs, name='owner-clubs-list'),
+    path('owners/<int:owner_id>/clubs/', views.get_owners_clubs, name='owner-clubs-list'),   #See all club fillter by owner id 
     path('user/places/', views.get_place_details, name='place-details'),
     path('clubs/<int:club_id>/reviews/', manage_club_reviews, name='manage-club-reviews'),
     path('profile/music-preferences/', manage_music_preferences, name='manage-music-preferences'),
@@ -80,7 +82,10 @@ urlpatterns = [
     path('profile/nights-out/', manage_nights_out, name='manage-nights-out'),
     path('following/', FollowingPageView.as_view(), name='following-page'),
     path('users/<int:user_id>/toggle-follow/', FollowToggleView.as_view(), name='toggle-follow'),
-    path('profile/', UserProfileView.as_view(), name='user-profile'),
+    path('profile/', UserProfileView.as_view(), name='user-profile'), 
+    path('clubs/recommend/', recommend_clubs, name='recommend-clubs'), # User preference details api
+ 
+
 
 
 

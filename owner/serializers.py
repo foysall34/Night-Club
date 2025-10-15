@@ -173,7 +173,7 @@ class ClubProfileSerializer(serializers.ModelSerializer):
         model = ClubProfile
         fields = [
             'id', 'owner', 'clubName', 'dressCode', 'ageRequirement', 'coverCharge',
-            'clubImageUrl', 'features', 'events', 'practicalInfo', 'contact',
+            'clubImageUrl', 'features', 'events', 'crowd_atmosphere',
             'club_type', 'vibes_type',
             'club_type_ids', 'vibes_type_ids'
         ]
@@ -424,8 +424,11 @@ class UserFollowSerializer(serializers.ModelSerializer):
 #=========================================================================================
 #=========================================================================================
 #=========================================================================================
-# For recomendation data 
+# For user  recomendation data 
 #=========================================================================================
+
+
+
 from rest_framework import serializers
 from geopy.geocoders import Nominatim
 from .models import UserProfile, MusicGenre, Vibe, CrowdAtmosphere
@@ -522,3 +525,37 @@ class UserProfileSerializer(serializers.ModelSerializer):
         
         instance.save()
         return instance
+    
+
+
+
+
+
+# owner recommcodetaion 
+
+from rest_framework import serializers
+from .models import ClubProfile, ClubOwner
+
+class ClubDetailSerializer(serializers.ModelSerializer):
+    club_id = serializers.IntegerField(source='id', read_only=True)
+    full_name = serializers.CharField(source='owner.full_name', read_only=True)
+    venue_city = serializers.CharField(source='owner.venue_city', read_only=True)
+    latitude = serializers.FloatField(source='owner.latitude', read_only=True)
+    longitude = serializers.FloatField(source='owner.longitude', read_only=True)
+    practical_info = serializers.JSONField(source='practicalInfo', read_only=True)
+    events = serializers.JSONField(read_only=True)
+    features = serializers.JSONField(read_only=True)
+
+    class Meta:
+        model = ClubProfile
+        
+        fields = [
+            'club_id',
+            'full_name',
+            'venue_city',
+            'latitude',
+            'longitude',
+            'features',
+            'events',
+            'practical_info', 
+        ]

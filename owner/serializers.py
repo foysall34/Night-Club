@@ -4,7 +4,8 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable 
 
 from rest_framework import serializers
-
+from .models import ClubOwner
+from rest_framework.decorators import api_view
 
 class ClubOwnerRegistrationSerializer(serializers.Serializer):
     full_name = serializers.CharField(required=True)
@@ -12,12 +13,12 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True)
     phone_number = serializers.CharField(required=True)
     venue_name = serializers.CharField(required=True)
-    venue_address = serializers.CharField(required=True)
     venue_city = serializers.CharField(required=True)
+    proof_doc=serializers.FileField(required= True)
     profile_image = serializers.FileField(required=True)
     id_front_page = serializers.FileField(required=True)
     id_back_page = serializers.FileField(required=True)
-    link = serializers.CharField(required=False, allow_blank=True, default='')
+
 
     def validate_email(self, value):
         """
@@ -34,7 +35,7 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
         """
  
         geolocator = Nominatim(user_agent="your_unique_app_name") 
-        full_address = f"{validated_data['venue_address']}, {validated_data['venue_city']}"
+        full_address = f"{validated_data['venue_name']}, {validated_data['venue_city']}"
         
        
         lat = None
@@ -60,17 +61,25 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
             password=validated_data['password'],
             phone_number=validated_data['phone_number'],
             venue_name=validated_data['venue_name'],
-            venue_address=validated_data['venue_address'],
             venue_city=validated_data['venue_city'],
+            proof_doc=validated_data['proof_doc'],
             profile_image=validated_data['profile_image'],
             id_front_page=validated_data['id_front_page'],
             id_back_page=validated_data['id_back_page'],
-            link=validated_data.get('link', ''),
             latitude=lat,  
             longitude=lon  
         )
-        print(user.latitude, user.longitude)
+        print(user.latitude, user.longitude)  
         return user
+
+
+
+class ClubOwnerStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClubOwner
+        fields = ['id', 'email', 'verification_status']
+
+
 
 class OwnerVerifyOTPSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
@@ -172,10 +181,10 @@ class ClubProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClubProfile
         fields = [
-            'id', 'owner', 'clubName', 'dressCode', 'ageRequirement', 'coverCharge',
+            'id', 'owner', 'clubName', 'about', 'dressCode', 'ageRequirement', 'coverCharge',
             'clubImageUrl', 'features', 'events', 'crowd_atmosphere',
             'club_type', 'vibes_type',
-            'club_type_ids', 'vibes_type_ids'
+            'club_type_ids', 'vibes_type_ids' ,'is_favourite','insta_link' , 'tiktok_link' , 'phone', 'email'
         ]
         read_only_fields = ('owner',)
     
@@ -189,6 +198,19 @@ class ClubProfileSerializer(serializers.ModelSerializer):
 
 
 
+
+
+from .models import ClubType, Vibes_Choice
+
+class ClubTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClubType
+        fields = ['id', 'name']  
+
+class VibesChoiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vibes_Choice
+        fields = ['id', 'name']
 
 
 # for weekly hours 
@@ -264,6 +286,15 @@ class EventSerializer(serializers.ModelSerializer):
   
             self.fields['club'].queryset = ClubProfile.objects.filter(owner=owner)
 
+
+
+
+
+
+class Get_all_EventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = '__all__' 
 
 
 from rest_framework import serializers

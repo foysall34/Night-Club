@@ -49,7 +49,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
         }),
         ('Venue Information', {
 
-            'fields': ('venue_name', 'venue_address', 'venue_city' ,'link', 'latitude', 'longitude')
+            'fields': ('venue_name','venue_city' ,'latitude', 'longitude')
         }),
         ('Status and Permissions', {
             'fields': ('verification_status', 'is_active', 'is_staff')

@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import ClubOwner
 from .serializers import *
-# views.py
+
 
 import os
 from django.conf import settings
@@ -27,7 +27,6 @@ from .models import ClubOwner
 from .serializers import ClubOwnerRegistrationSerializer, OwnerVerifyOTPSerializer
 from .utils import generate_otp, send_otp_email
 
-# views.py
 
 import random
 from django.utils import timezone
@@ -38,44 +37,41 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import authenticate
 from .models import ClubOwner
-from .serializers import ClubOwnerRegistrationSerializer
+from .serializers import ClubOwnerRegistrationSerializer ,ClubOwnerStatusSerializer
+
+
+
+@api_view(['GET'])
+def get_all_clubowners_status(request):
+    owners = ClubOwner.objects.all().order_by('-id')  
+    serializer = ClubOwnerStatusSerializer(owners, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
 
 class OwnerRegisterView(generics.CreateAPIView):
-    """
-    View for registering a new Club Owner.
-    """
     serializer_class = ClubOwnerRegistrationSerializer
-
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         print(serializer)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-
-        
+        user = serializer.save()     
         otp = str(random.randint(1000, 9999))
         user.otp = otp
         user.otp_created_at = timezone.now()
         user.save()
-
-        # Send OTP to user's email
         send_mail(
             'Your OTP for registration',
             f'Your OTP is: {otp}',
             'from@example.com',
             [user.email],
-            fail_silently=False,
-        )
-
+            fail_silently=False,)
         return Response(
             {"message": "User registered successfully. Please check your email for OTP."},
-            status=status.HTTP_201_CREATED
-        )
+            status=status.HTTP_201_CREATED)
 
 class OwnerVerifyOTPView(APIView):
-    """
-    View for verifying OTP and activating the user's account.
-    """
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
         otp = request.data.get('otp')
@@ -152,8 +148,8 @@ class OwnerLoginView(APIView):
 
             return Response({
                 "message": "Login successful.",
-                "access": str(refresh.access_token),
                 "refresh": str(refresh),
+                "access": str(refresh.access_token),
                 "email": user.email
             }, status=status.HTTP_200_OK)
         else:
@@ -194,6 +190,58 @@ class OwnerForgotPasswordView(APIView):
         
 
 
+class OwnerPasswordResetView(APIView):
+    """
+    View for resetting the user's password using an OTP.
+    """
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        # otp = request.data.get('otp')
+        new_password = request.data.get('new_password')
+        # password_confirmation = request.data.get('password_confirmation')
+
+
+        # if not all([email, otp, new_password, password_confirmation]):
+        #     return Response({"error": "Please provide email, OTP, and new password."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        # if new_password != password_confirmation:
+        #     return Response({"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+
+            user = ClubOwner.objects.get(email=email)
+
+       
+            # if user.otp != otp:
+            #     return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+            # if user.otp_created_at:
+            #     otp_expiry_time = user.otp_created_at + timedelta(minutes=10)
+            #     if timezone.now() > otp_expiry_time:
+            
+            #         user.otp = None
+            #         user.otp_created_at = None
+            #         user.save()
+            #         return Response({"error": "OTP has expired."}, status=status.HTTP_400_BAD_REQUEST)
+            # else:
+            #      return Response({"error": "No OTP was requested."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+            user.set_password(new_password)
+
+     
+            # user.otp = None
+            # user.otp_created_at = None
+            user.save()
+
+            return Response({"message": "Password has been reset successfully."}, status=status.HTTP_200_OK)
+
+        except ClubOwner.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
 
 
 
@@ -213,6 +261,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 # View for listing all clubs and creating a new one
 from .authentications import ClubOwnerAuthentication
 from .serializers import ClubProfileSerializer
+from rest_framework.decorators import api_view 
 
 
 
@@ -276,6 +325,30 @@ class ClubProfileRetrieveUpdateDestroyAPIView(APIView):
         club_profile.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
+
+from .models import ClubType, Vibes_Choice
+from .serializers import ClubTypeSerializer, VibesChoiceSerializer
+
+class ClubTypeListAPIView(generics.ListAPIView):
+   
+    queryset = ClubType.objects.all()
+    serializer_class = ClubTypeSerializer
+   
+
+class VibesChoiceListAPIView(generics.ListAPIView):
+  
+    queryset = Vibes_Choice.objects.all()
+    serializer_class = VibesChoiceSerializer
+   
+
+
+
+
+
+
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -334,6 +407,26 @@ class EventListCreateAPIView(APIView):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+
+@api_view(['GET'])
+def get_all_events(request):
+    events = Event.objects.all().order_by('-date', '-time')
+    serializer = Get_all_EventSerializer(events, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+@api_view(['GET'])
+def get_upcoming_events(request):
+    # current date for filtering
+    today = timezone.now().date()
+
+    # filter events whose date is today or after
+    events = Event.objects.filter(created_at__date__gte=today).order_by('date', 'time')
+
+
+    serializer = Get_all_EventSerializer(events, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 class EventRetrieveUpdateDestroyAPIView(APIView):
     authentication_classes = [ClubOwnerAuthentication]
@@ -1151,3 +1244,88 @@ def recommend_clubs(request):
         "count": len(sorted_recommendations),
         "results": sorted_recommendations[:5]  # Top 5 clubs
     })
+
+
+# for Trending Club 
+# views.py
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from rest_framework import status
+
+@api_view(['POST'])
+def club_click(request, club_id):
+    club = get_object_or_404(ClubProfile, id=club_id)
+    club.click_count += 1
+    club.save()
+    return Response({"message": f"{club.clubName} clicked", "total_clicks": club.click_count}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def get_trendy_club(request, owner_id):
+    owner = get_object_or_404(ClubOwner, id=owner_id)
+    trendy_clubs = ClubProfile.objects.filter(owner=owner).order_by('-click_count')
+
+    if not trendy_clubs.exists():
+        return Response({"message": "No clubs found for this owner"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = ClubProfileSerializer(trendy_clubs, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+
+class DashboardStatsView(APIView):
+    def get(self, request, format=None):
+        """
+        Return a list of all users.
+        """
+        dummy_data = {
+            "events_this_month": {
+                "value": 7,
+                "comparison": "3 more than last month"
+            },
+            "live_events": {
+                "title": " Night",
+                "viewers": 325
+            },
+            "reviews": {
+                "rating": 4.5,
+                "count": 86,
+                "period": "this week"
+            },
+            "revenue": {
+                "amount": 600,
+                "percentage_change": 15,
+                "comparison": "vs last month"
+            }
+        }
+        return Response(dummy_data)
+    
+
+
+class AnalyticalDashboard(APIView):
+    def get(self, request, format=None):
+        """
+        Return a list of all users.
+        """
+        dummy_data = {
+            "Total Events Created": {
+                "value": 5,
+            },
+            "Profile Views": {
+ 
+                "viewers": 3
+            },
+            "Total Attendees": {
+        
+                "count": 86,
+                
+            },
+            "Engagement Rate": {
+                "Rate":"4.2%"
+               
+            }
+        }
+        return Response(dummy_data)

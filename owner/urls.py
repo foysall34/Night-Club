@@ -22,20 +22,28 @@ urlpatterns = [
 #=============================================================================================
 #=============================================================================================
 
-
+    path('clubowners/status/', get_all_clubowners_status, name='clubowners-status'),
     path('owner/register/', OwnerRegisterView.as_view(), name='register'),
     path('owner/verify-otp/', OwnerVerifyOTPView.as_view(), name='verify-otp'),
     path('owner/resend-otp/', OwnerResendOTPView.as_view(), name='resend-otp'),
     path('owner/log-in/', OwnerLoginView.as_view(), name='log-in'),
     path('owner/forgot-password/', OwnerForgotPasswordView.as_view(), name='forgot-password'),
+    path('owner/reset-password/', OwnerPasswordResetView.as_view(), name='owner-reset-password'),
     # path('owner/change-password/', OwnerChangePasswordView.as_view(), name='change-password'),
     path('owner/clubs/', ClubProfileListCreateAPIView.as_view(), name='club-list-create'),
     path('owner/club-profiles/<int:pk>/', ClubProfileListCreateAPIView.as_view(), name='club-profile-detail'),
-    path('owner/legal/<slug:type_slug>/', LegalContentView.as_view(), name='legal-content'),
+    path('owner/legal-content/<slug:type_slug>/', LegalContentView.as_view(), name='legal-content'),
     path('owner/club-profile/weekly-hours/', WeeklyHoursAPIView.as_view(), name='club-profile-weekly-hours'),
     path('owner/events/', EventListCreateAPIView.as_view(), name='event-list-create'),
     path('owner/events/<int:pk>/', EventRetrieveUpdateDestroyAPIView.as_view(), name='event-detail'),
     path('club-recomend-info/<int:pk>/', ClubDetailView.as_view(), name='club-detail'),
+    path('owner/dashborad-status/', DashboardStatsView.as_view(), name='club-detail'),
+    path('owner/anlytical-dashborad-status/', AnalyticalDashboard.as_view(), name='club-'),
+
+    path('owner/club-types/', ClubTypeListAPIView.as_view(), name='club-type-list'),
+    path('owner/vibes-choices/', VibesChoiceListAPIView.as_view(), name='vibes-choice-list'),
+    
+
 
     # path('owner/clubs/<int:club_id>/reviews/', ClubReviewListCreateView.as_view(), name='club-reviews'),
 
@@ -84,7 +92,13 @@ urlpatterns = [
     path('users/<int:user_id>/toggle-follow/', FollowToggleView.as_view(), name='toggle-follow'),
     path('profile/', UserProfileView.as_view(), name='user-profile'), 
     path('clubs/recommend/', recommend_clubs, name='recommend-clubs'), # User preference details api
- 
+    path('trendy-club/<int:owner_id>/' , get_trendy_club , name= 'trendy') ,
+    path('clubs/<int:club_id>/click/', views.club_click, name='club_click'),
+    path('all-events/', get_all_events, name='get_all_events'),
+    path('events/upcoming/', get_upcoming_events, name='upcoming-events'),
+
+
+
 
 
 

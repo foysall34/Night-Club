@@ -11,7 +11,6 @@ from django.contrib.contenttypes.models import ContentType
 # PART 1: CLUB OWNER MODELS
 # (This section remains the same as your original code)
 # ==============================================================================
-
 class ClubOwnerManager(BaseUserManager):
     def create_user(self, email, full_name, password=None, **extra_fields):
         if not email:
@@ -51,13 +50,13 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=20)
     venue_name = models.CharField(max_length=255)
-    venue_address = models.CharField(max_length=255)
     venue_city = models.CharField(max_length=100 , default='write city')
-    link = models.CharField(max_length=300, default='link', blank=True, null=True)
+    
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
 
     # --- Verification Documents ---
+    proof_doc = models.FileField(upload_to='proofs/images/' , default='upload file')
     profile_image = models.FileField(upload_to='proofs/images/')
     id_front_page = models.FileField(upload_to='proofs/ids/')
     id_back_page = models.FileField(upload_to='proofs/ids/')
@@ -131,8 +130,7 @@ class UserManager(BaseUserManager):
             raise ValueError('Superuser must have is_staff=True.')
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
-        
-        # Note: This will create a superuser of type User
+ 
         return self.create_user(email, full_name, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -314,6 +312,7 @@ class ClubProfile(models.Model):
     club_type = models.ManyToManyField(ClubType, blank=True)
     vibes_type = models.ManyToManyField(Vibes_Choice, blank=True)
     dressCode = models.CharField(max_length=255, blank=True)
+    about = models.TextField(max_length=5000 , default='write about')
     ageRequirement = models.CharField(max_length=100, blank=True)
     coverCharge = models.CharField(max_length=255, blank=True)
     clubImageUrl = models.ImageField(upload_to='clubs/images/', max_length=500, blank=True, null=True)
@@ -322,6 +321,12 @@ class ClubProfile(models.Model):
     crowd_atmosphere = models.JSONField(default=dict)
     weekly_hours = models.JSONField(default=get_default_weekly_hours)
     reviews = models.JSONField(default=list) 
+    click_count = models.PositiveIntegerField(default=0)
+    is_favourite = models.BooleanField(default=False)
+    insta_link = models.CharField(max_length=2000 , default='insta link')
+    tiktok_link = models.CharField(max_length=2000 , default='tiktok link')
+    phone =models.IntegerField(null= True , blank= True)
+    email =models.CharField(null= True, blank=True)
 
     def __str__(self):
         return self.clubName or f"Unnamed Club (ID: {self.id})"

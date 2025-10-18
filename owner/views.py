@@ -563,7 +563,7 @@ from datetime import timedelta
 from .models import User
 from .serializers import (
     UserRegistrationSerializer, VerifyOTPSerializer, ResendOTPSerializer, UserLoginSerializer,
-    ChangePasswordSerializer, ForgotPasswordSerializer, ResetPasswordSerializer
+    ChangePasswordSerializer, 
 )
 from .userutils  import send_otp_email
 from rest_framework.permissions import IsAuthenticated
@@ -634,8 +634,8 @@ class UserResendOTPAPIView(APIView):
             except User.DoesNotExist:
                 return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
             
-            if user.is_active:
-                return Response({"message": "This account is already verified."}, status=status.HTTP_400_BAD_REQUEST)
+            # if user.is_active:
+            #     return Response({"message": "This account is already verified."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Send a new OTP
             send_otp_email(user)
@@ -711,37 +711,48 @@ class UserChangePasswordAPIView(APIView):
 
 class UserForgotPasswordAPIView(APIView):
     def post(self, request):
-        serializer = ForgotPasswordSerializer(data=request.data)
+        serializer = ForgotPasswordOTPSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
             try:
                 user = User.objects.get(email=email)
-                token_generator = PasswordResetTokenGenerator()
-                uidb64 = urlsafe_base64_encode(smart_bytes(user.pk))
-                token = token_generator.make_token(user)
-                
-                reset_link = f"http://your-frontend-domain/reset-password/{uidb64}/{token}/"
-                
-                # Send email
-                subject = 'Password Reset Request'
-                message = f'Hi {user.full_name},\n\nPlease click on the link below to reset your password:\n{reset_link}\n\nIf you did not request this, please ignore this email.'
-                send_mail(subject, message, settings.EMAIL_HOST_USER, [user.email])
-
-                return Response({'message': 'Password reset link has been sent to your email.'}, status=status.HTTP_200_OK)
+                send_otp_email(user)
             except User.DoesNotExist:
-                # Still return a success message to not reveal which emails are registered
-                return Response({'message': 'If an account with this email exists, a password reset link has been sent.'}, status=status.HTTP_200_OK)
+           
+                pass
+            return Response({'message': 'If your email is registered, an OTP has been sent.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserResetPasswordAPIView(APIView):
-    def post(self, request, uidb64, token):
-        serializer = ResetPasswordSerializer(data=request.data, context={'uidb64': uidb64, 'token': token})
+    def post(self, request):
+        serializer = ResetPasswordWithOTPSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({'message': 'Password has been reset successfully.'}, status=status.HTTP_200_OK)
+            email = serializer.validated_data['email']
+            # otp = serializer.validated_data['otp']
+            new_password = serializer.validated_data['new_password']
+
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                return Response({'error': 'Invalid email or OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # OTP match & time check
+            # if user.otp != otp:
+            #     return Response({'error': 'Invalid OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # if user.otp_created_at + timedelta(minutes=5) < timezone.now():
+            #     return Response({'error': 'OTP expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # ✅ Password reset
+            user.set_password(new_password)
+            # user.otp = None
+            # user.otp_created_at = None
+            user.save()
+
+            return Response({'message': 'Password reset successfully.'}, status=status.HTTP_200_OK)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
 
 
 
@@ -752,19 +763,30 @@ class UserResetPasswordAPIView(APIView):
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-@api_view(['POST']) 
+@api_view(['POST'])
 def get_place_details(request):
-    location = request.data.get('location', None) 
-    city = request.data.get('city', None)      
-  
+    email = request.data.get('email')
+    location = request.data.get('location')
+    city = request.data.get('city')
 
-    if not location or not city:
-        error_message = {"error": "please provide both 'location' and 'city'."}
-        return Response(error_message, status=status.HTTP_400_BAD_REQUEST)
+  
+    if not email:
+        return Response({"error": "email field is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+    if not location and not city:
+        return Response(
+            {"error": "please provide either 'location' or 'city'."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    
+    final_location = location if location else city
 
     dummy_response = {
+        "email": email,
         "name": "Smuggler's Cove",
-        "address": f"{location}, {city}",
+        "address": f"{final_location}",
         "distance": "1.5 km",
         "duration": "19 mins",
         "rating": 4.7,
@@ -782,7 +804,6 @@ def get_place_details(request):
 
 
 
-
 from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
 @api_view(['GET'])
@@ -791,6 +812,85 @@ def get_owners_clubs(request, owner_id):
     clubs = ClubProfile.objects.filter(owner=owner)
     serializer = ClubProfileSerializer(clubs, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+
+# all club by get 
+
+@api_view(['GET'])
+def get_all_clubs(request):
+    clubs = ClubProfile.objects.all()
+
+    data = []
+    for club in clubs:
+        data.append({
+            "id": club.id,
+            "owner": club.owner.full_name if club.owner else None,
+            "clubName": club.clubName,
+            "club_type": [ct.name for ct in club.club_type.all()],
+            "vibes_type": [v.name for v in club.vibes_type.all()],
+            "clubImageUrl": club.clubImageUrl.url if club.clubImageUrl else None,
+            "features": club.features,
+            "events": club.events,
+            "crowd_atmosphere": club.crowd_atmosphere,
+            "is_favourite": club.is_favourite,
+ 
+        
+        })
+
+    return Response({"clubs": data}, status=status.HTTP_200_OK)
+
+
+# Filter by club type 
+
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    """Haversine formula to calculate distance in km between two points"""
+    R = 6371
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    return R * c
+
+@api_view(['POST'])
+def get_clubs_by_type_post(request):
+    club_type_name = request.data.get('club_type')
+    email = request.data.get('email')
+    debug_logs = []
+
+    if not email:
+        return Response({"error": "email is required"}, status=400)
+
+    # get user location
+    try:
+        user_profile = UserProfile.objects.get(user__email=email)
+        user_lat, user_lon = float(user_profile.latitude), float(user_profile.longitude)
+        debug_logs.append(f"User location: lat={user_lat}, lon={user_lon}")
+    except UserProfile.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+    # filter clubs by type
+    if club_type_name:
+        clubs = ClubProfile.objects.filter(club_type__name=club_type_name)
+    else:
+        clubs = ClubProfile.objects.all()
+
+    # calculate distance
+    data = []
+    for club in clubs:
+        if club.latitude is not None and club.longitude is not None:
+            distance = calculate_distance(user_lat, user_lon, float(club.latitude), float(club.longitude))
+            debug_logs.append(f"Club: {club.clubName}, location: ({club.latitude}, {club.longitude}), distance={distance:.2f} km")
+            data.append({
+                "id": club.id,
+                "distance_km": round(distance, 2)
+            })
+
+    return Response({"clubs": data}, status=200)
+
 
 
 
@@ -867,142 +967,128 @@ from .models import User, ClubOwner, UserProfile , MusicGenre , Vibe ,CrowdAtmos
 
 
 
-@api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
-def manage_music_preferences(request):
 
-    if isinstance(request.user, ClubOwner):
-        return Response(
-            {"error": "This endpoint is only for regular users."},
-            status=status.HTTP_403_FORBIDDEN 
-        )
 
-    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
 
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+
+from .models import User, UserProfile, MusicGenre, Vibe, CrowdAtmosphere
+
+@api_view(['GET', 'POST', 'PATCH'])
+def manage_user_profile_preferences(request):
+    # 📨 user বের করা email থেকে
+    email = request.data.get('email') or request.query_params.get('email')
+    if not email:
+        return Response({"error": "email field is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = get_object_or_404(User, email=email)
+    user_profile, created = UserProfile.objects.get_or_create(user=user)
+
+    # =============================
+    #  🎧 GET Method
+    # =============================
     if request.method == 'GET':
-      
-        preferences = user_profile.music_preferences.values_list('name', flat=True)
-        data = {
-            'music_preferences': list(preferences)
-        }
-        return Response(data, status=status.HTTP_200_OK)
+        music = list(user_profile.music_preferences.values_list('name', flat=True))
+        vibes = list(user_profile.ideal_vibes.values_list('name', flat=True))
+        crowds = list(user_profile.crowd_atmosphere.values_list('name', flat=True))
+        nights = user_profile.nights_out if hasattr(user_profile, 'nights_out') else None
 
+        return Response({
+            "email": email,
+            "music_preferences": music,
+            "vibes": vibes,
+            "crowd_atmosphere": crowds,
+            "nights_out": nights
+        }, status=status.HTTP_200_OK)
 
+    # =============================
+    # 📨 POST Method (Set / Replace)
+    # =============================
     elif request.method == 'POST':
-        preference_names = request.data.get('music_preferences')
+        # 🎧 Music
+        music_names = request.data.get('music_preferences', [])
+        if not isinstance(music_names, list):
+            return Response({"error": "music_preferences must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+        valid_music = MusicGenre.objects.filter(name__in=music_names)
+        user_profile.music_preferences.set(valid_music)
 
-        if not isinstance(preference_names, list):
-            return Response(
-                {"error": "music_preferences must be a list."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-  
-        all_allowed_genres = set(MusicGenre.objects.values_list('name', flat=True))
-
-  
-        for genre_name in preference_names:
-            if genre_name not in all_allowed_genres:
-                return Response(
-                    {"error": f"'{genre_name}' is not a valid music genre."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        genres_to_set = MusicGenre.objects.filter(name__in=preference_names)
-
-
-        user_profile.music_preferences.set(genres_to_set)
-
-        return Response(
-            {"message": "Your music preferences have been updated successfully."},
-            status=status.HTTP_200_OK)
-
-
-
-
-
-@api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
-def manage_ideal_vibes(request):
-
-    if isinstance(request.user, ClubOwner):
-        return Response(
-            {"error": "This endpoint is only for regular users."},
-            status=status.HTTP_403_FORBIDDEN
-        )
-
-    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
-    
-   
-
-
-    if request.method == 'GET':
-
-        vibes = user_profile.ideal_vibes.values_list('name', flat=True)
-        return Response({'ideal_vibes': list(vibes)}, status=status.HTTP_200_OK)
-
- 
-    elif request.method == 'POST':
-        vibe_names = request.data.get('ideal_vibes')
-
+        # 🎭 Vibe
+        vibe_names = request.data.get('vibes', [])
         if not isinstance(vibe_names, list):
-            return Response({"error": "ideal_vibes must be a list."}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "vibes must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+        valid_vibes = Vibe.objects.filter(name__in=vibe_names)
+        user_profile.ideal_vibes.set(valid_vibes)
 
-        all_allowed_vibes = set(Vibe.objects.values_list('name', flat=True))
-
- 
-        for vibe_name in vibe_names:
-            if vibe_name not in all_allowed_vibes:
-                return Response({"error": f"'{vibe_name}' is not an allowed vibe."}, status=status.HTTP_400_BAD_REQUEST)
-
- 
-        vibes_to_set = Vibe.objects.filter(name__in=vibe_names)
-
-        user_profile.ideal_vibes.set(vibes_to_set)
-        
-        return Response({"message": "Your preferred vibes have been saved successfully."}, status=status.HTTP_200_OK)
-
-
-@api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
-def manage_crowd_atmosphere(request):
-
-    if isinstance(request.user, ClubOwner):
-        return Response(
-            {"error": "This endpoint is only for regular users."},
-            status=status.HTTP_403_FORBIDDEN
-        )
-    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
-
-    if request.method == 'GET':
-
-        crowds = user_profile.crowd_atmosphere.values_list('name', flat=True)
-        return Response({'crowd_atmosphere': list(crowds)}, status=status.HTTP_200_OK)
-
-
-    elif request.method == 'POST':
-        crowd_names = request.data.get('crowd_atmosphere')
-
-
+        # 👥 Crowd Atmosphere
+        crowd_names = request.data.get('crowd_atmosphere', [])
         if not isinstance(crowd_names, list):
             return Response({"error": "crowd_atmosphere must be a list."}, status=status.HTTP_400_BAD_REQUEST)
-        
+        valid_crowds = CrowdAtmosphere.objects.filter(name__in=crowd_names)
+        user_profile.crowd_atmosphere.set(valid_crowds)
 
-        all_allowed_crowds = set(CrowdAtmosphere.objects.values_list('name', flat=True))
+        # 🌙 Nights out
+        nights = request.data.get('nights_out')
+        if nights is not None:
+            try:
+                nights_int = int(nights)
+                if not (1 <= nights_int <= 7):
+                    raise ValueError
+                user_profile.nights_out = nights_int
+            except (ValueError, TypeError):
+                return Response({"error": "nights_out must be a number between 1 and 7."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_profile.save()
+
+        return Response({"message": "All preferences set successfully."}, status=status.HTTP_200_OK)
+
+    # =============================
+    # 🛠 PATCH Method (Update / Add)
+    # =============================
+    elif request.method == 'PATCH':
+        # 🎧 Music
+        music_names = request.data.get('music_preferences', [])
+        if isinstance(music_names, list):
+            current_music = set(user_profile.music_preferences.values_list('name', flat=True))
+            updated_music = current_music.union(set(music_names))
+            valid_music = MusicGenre.objects.filter(name__in=updated_music)
+            user_profile.music_preferences.set(valid_music)
+
+        # 🎭 Vibe
+        vibe_names = request.data.get('vibes', [])
+        if isinstance(vibe_names, list):
+            current_vibes = set(user_profile.ideal_vibes.values_list('name', flat=True))
+            updated_vibes = current_vibes.union(set(vibe_names))
+            valid_vibes = Vibe.objects.filter(name__in=updated_vibes)
+            user_profile.ideal_vibes.set(valid_vibes)
+
+        # 👥 Crowd
+        crowd_names = request.data.get('crowd_atmosphere', [])
+        if isinstance(crowd_names, list):
+            current_crowds = set(user_profile.crowd_atmosphere.values_list('name', flat=True))
+            updated_crowds = current_crowds.union(set(crowd_names))
+            valid_crowds = CrowdAtmosphere.objects.filter(name__in=updated_crowds)
+            user_profile.crowd_atmosphere.set(valid_crowds)
+
+        # 🌙 Nights out
+        nights = request.data.get('nights_out')
+        if nights is not None:
+            try:
+                nights_int = int(nights)
+                if not (1 <= nights_int <= 7):
+                    raise ValueError
+                user_profile.nights_out = nights_int
+            except (ValueError, TypeError):
+                return Response({"error": "nights_out must be a number between 1 and 7."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_profile.save()
+
+        return Response({"message": "Preferences updated successfully."}, status=status.HTTP_200_OK)
 
 
-        for crowd_name in crowd_names:
-            if crowd_name not in all_allowed_crowds:
-                return Response({"error": f"'{crowd_name}' is not an allowed option."}, status=status.HTTP_400_BAD_REQUEST)
-
-  
-        crowds_to_set = CrowdAtmosphere.objects.filter(name__in=crowd_names)
-
-      
-        user_profile.crowd_atmosphere.set(crowds_to_set)
-        
-        return Response({"message": "Your preferred crowd atmosphere has been saved successfully."}, status=status.HTTP_200_OK)
 
 
 
@@ -1019,26 +1105,6 @@ def manage_crowd_atmosphere(request):
 
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def manage_nights_out(request):
-    user_profile = request.user.profile
-    
-    nights = request.data.get('nights_out')
-
-    if nights is None:
-        return Response({"error": "nights_out mandatory"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        nights_int = int(nights)
-        if not (1 <= nights_int <= 7):
-            raise ValueError
-    except (ValueError, TypeError):
-        return Response({"error": "nights_out must be a number between 1 and 7."}, status=status.HTTP_400_BAD_REQUEST)
-
-    user_profile.nights_out = nights_int
-    user_profile.save()
-    return Response({"message": f"weekly nights out digit {nights_int} saved"}, status=status.HTTP_200_OK)
 
 
 
@@ -1329,3 +1395,216 @@ class AnalyticalDashboard(APIView):
             }
         }
         return Response(dummy_data)
+    
+
+
+
+# nearby clubs 
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from math import radians, sin, cos, sqrt, atan2
+
+from .models import ClubProfile, UserProfile
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    """
+    Haversine formula to calculate distance in km between two points
+    """
+    R = 6371  # Earth radius in km
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    return R * c
+
+@api_view(['GET', 'POST'])
+def nearby_clubs(request):
+    """
+    Returns clubs within 5 km of user
+    Debug version included
+    """
+    email = request.data.get('email') or request.query_params.get('email')
+    if not email:
+        return Response({"error": "email field is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    debug_logs = []
+
+    # Get user profile
+    try:
+        user_profile = UserProfile.objects.get(user__email=email)
+    except UserProfile.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    debug_logs.append(f"User email: {email}")
+    debug_logs.append(f"User location: lat={user_profile.latitude}, lon={user_profile.longitude}")
+
+    if not user_profile.latitude or not user_profile.longitude:
+        return Response({"error": "User location not set", "debug_logs": debug_logs}, status=status.HTTP_400_BAD_REQUEST)
+
+    nearby = []
+    for club in ClubProfile.objects.all():
+        if club.latitude is not None and club.longitude is not None:
+            distance = calculate_distance(
+                float(user_profile.latitude), 
+                float(user_profile.longitude),
+                float(club.latitude),
+                float(club.longitude)
+            )
+            debug_logs.append(f"Club: {club.clubName}, location: ({club.latitude}, {club.longitude}), distance={distance:.2f} km")
+            if distance <= 5:  # 5 km radius
+                nearby.append({
+                    "id": club.id,
+                    "distance_km": round(distance, 2),
+               
+                })
+
+    return Response({"nearby_clubs": nearby, "debug_logs": debug_logs}, status=status.HTTP_200_OK)
+
+
+
+# Open today 
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from datetime import datetime, time
+from .models import ClubProfile, UserProfile
+from math import radians, sin, cos, sqrt, atan2
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    """Haversine formula for distance in km"""
+    R = 6371
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat/2)**2 + cos(radians(lat1))*cos(radians(lat2))*sin(dlon/2)**2
+    c = 2*atan2(sqrt(a), sqrt(1-a))
+    return R*c
+
+@api_view(['POST'])
+def nearby_currently_open_clubs(request):
+    email = request.data.get('email')
+    if not email:
+        return Response({"error": "email field is required"}, status=400)
+
+    debug_logs = []
+
+    try:
+        user_profile = UserProfile.objects.get(user__email=email)
+    except UserProfile.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+    if not user_profile.latitude or not user_profile.longitude:
+        return Response({"error": "User location not set"}, status=400)
+
+    debug_logs.append(f"User location: lat={user_profile.latitude}, lon={user_profile.longitude}")
+
+    today = datetime.now().strftime("%A").lower()  # monday, tuesday ...
+    now_time = datetime.now().time()
+
+    nearby = []
+
+    for club in ClubProfile.objects.all():
+        if club.latitude is None or club.longitude is None:
+            debug_logs.append(f"Club {club.clubName} has no location")
+            continue
+
+        distance = calculate_distance(
+            float(user_profile.latitude),
+            float(user_profile.longitude),
+            float(club.latitude),
+            float(club.longitude)
+        )
+        debug_logs.append(f"Club: {club.clubName}, distance={distance:.2f} km")
+
+        if distance > 5:
+            continue  # 5 km radius
+
+        weekly_hours = club.weekly_hours or {}
+        today_hours = weekly_hours.get(today)
+        if not today_hours:
+            debug_logs.append(f"Club {club.clubName} has no hours for today")
+            continue
+
+        start_str = today_hours.get('start_time')
+        end_str = today_hours.get('end_time')
+        if not start_str or not end_str:
+            debug_logs.append(f"Club {club.clubName} start/end time missing for today")
+            continue
+
+        start_time = datetime.strptime(start_str, "%H:%M").time()
+        end_time = datetime.strptime(end_str, "%H:%M").time()
+
+        # Handle overnight closing (e.g., 18:00-02:00)
+        if start_time < end_time:
+            is_open = start_time <= now_time <= end_time
+        else:
+            # cross-midnight
+            is_open = now_time >= start_time or now_time <= end_time
+
+        if is_open:
+            nearby.append({
+                "id": club.id,
+
+         
+           
+                "distance_km": round(distance, 2),
+  
+            })
+        else:
+            debug_logs.append(f"Club {club.clubName} is closed now")
+
+    if not nearby:
+        return Response({"message": "No club is open now", "debug_logs": debug_logs}, status=200)
+
+    return Response({"nearby_open_clubs": nearby, "debug_logs": debug_logs}, status=200)
+
+
+
+
+# is favourite 
+
+@api_view(['GET', 'PATCH'])
+def favourite_clubs(request):
+    """
+    GET: list all clubs with is_favourite=True
+    PATCH: update is_favourite for a given club id
+    """
+
+    # --- PATCH: update is_favourite ---
+    if request.method == 'PATCH':
+        club_id = request.data.get('club_id')
+        is_fav = request.data.get('is_favourite')
+
+        if club_id is None or is_fav is None:
+            return Response({"error": "club_id and is_favourite are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            club = ClubProfile.objects.get(id=club_id)
+        except ClubProfile.DoesNotExist:
+            return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Ensure is_favourite is boolean
+        if isinstance(is_fav, str):
+            is_fav = is_fav.lower() in ['true', '1', 'yes']
+
+        club.is_favourite = bool(is_fav)
+        club.save()
+
+        return Response({"message": f"Club '{club.clubName}' favourite status updated to {club.is_favourite}"}, status=status.HTTP_200_OK)
+
+    # --- GET: list favourite clubs ---
+    elif request.method == 'GET':
+        favourite_clubs = ClubProfile.objects.filter(is_favourite=True)
+        data = []
+        for club in favourite_clubs:
+            data.append({
+                "id": club.id,
+                "clubName": club.clubName,
+                "club_location": club.club_location,
+                "latitude": club.latitude,
+                "longitude": club.longitude,
+                "is_favourite": club.is_favourite,
+                "phone": club.phone,
+                "email": club.email,
+            })
+        return Response({"favourite_clubs": data}, status=status.HTTP_200_OK)

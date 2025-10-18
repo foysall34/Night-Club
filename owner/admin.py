@@ -45,7 +45,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Personal Information', {
     
-            'fields': ('email', 'full_name', 'phone_number')
+            'fields': ('email', 'full_name', 'password', 'phone_number')
         }),
         ('Venue Information', {
 

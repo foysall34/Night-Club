@@ -106,6 +106,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 
 
+
 # For  owner profile club 
 # api/serializers.py
 
@@ -158,7 +159,7 @@ class CommaSeparatedPKField(serializers.Field):
   
         return None
 
-
+from geopy.geocoders import Nominatim
 
 class ClubProfileSerializer(serializers.ModelSerializer):
     owner = serializers.StringRelatedField(read_only=True)
@@ -184,17 +185,35 @@ class ClubProfileSerializer(serializers.ModelSerializer):
             'id', 'owner', 'clubName', 'about', 'dressCode', 'ageRequirement', 'coverCharge',
             'clubImageUrl', 'features', 'events', 'crowd_atmosphere',
             'club_type', 'vibes_type',
-            'club_type_ids', 'vibes_type_ids' ,'is_favourite','insta_link' , 'tiktok_link' , 'phone', 'email'
+            'club_type_ids', 'vibes_type_ids', 'is_favourite',
+            'insta_link', 'tiktok_link', 'phone', 'email', 'club_location', 'latitude', 'longitude'
         ]
-        read_only_fields = ('owner',)
-    
+        read_only_fields = ('owner', 'latitude', 'longitude')
+
+    def _set_lat_lng(self, validated_data):
+        """
+        Auto populate latitude & longitude from club_location
+        """
+        location_name = validated_data.get('club_location')
+        if location_name:
+            geolocator = Nominatim(user_agent="my_app")
+            try:
+                location = geolocator.geocode(location_name)
+                if location:
+                    validated_data['latitude'] = location.latitude
+                    validated_data['longitude'] = location.longitude
+            except Exception as e:
+                # Fail silently or log
+                print(f"Geocoding failed: {e}")
+
     def create(self, validated_data):
         validated_data['owner'] = self.context['request'].user
+        self._set_lat_lng(validated_data)
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
+        self._set_lat_lng(validated_data)
         return super().update(instance, validated_data)
-
 
 
 
@@ -368,46 +387,13 @@ class UserLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(style={'input_type': 'password'})
 
-class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True)
-    confirm_new_password = serializers.CharField(required=True)
-
-    def validate(self, data):
-        if data['new_password'] != data['confirm_new_password']:
-            raise serializers.ValidationError("New passwords must match.")
-        return data
-
-class ForgotPasswordSerializer(serializers.Serializer):
+class ForgotPasswordOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
-class ResetPasswordSerializer(serializers.Serializer):
-    password = serializers.CharField(write_only=True, required=True)
-    confirm_password = serializers.CharField(write_only=True, required=True)
-
-    def validate(self, data):
-        if data['password'] != data['confirm_password']:
-            raise serializers.ValidationError("Passwords must match.")
-        return data
-
-    def save(self):
-        # uidb64 and token are passed through context from the view
-        uidb64 = self.context.get('uidb64')
-        token = self.context.get('token')
-        password = self.validated_data['password']
-
-        try:
-            uid = force_str(urlsafe_base64_decode(uidb64))
-            user = User.objects.get(pk=uid)
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            user = None
-
-        if user is not None and PasswordResetTokenGenerator().check_token(user, token):
-            user.set_password(password)
-            user.save()
-            return user
-        else:
-            raise serializers.ValidationError("Reset link is invalid or has expired.")
+class ResetPasswordWithOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    # otp = serializers.CharField(max_length=6)
+    new_password = serializers.CharField(write_only=True)
         
 
 

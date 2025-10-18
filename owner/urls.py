@@ -80,14 +80,11 @@ urlpatterns = [
     # Password Management
     path('user/change-password/', UserChangePasswordAPIView.as_view(), name='user-change-password'),
     path('user/forgot-password/', UserForgotPasswordAPIView.as_view(), name='user-forgot-password'),
-    path('user/reset-password/<uidb64>/<token>/', UserResetPasswordAPIView.as_view(), name='user-reset-password'),
+    path('user/reset-password/', UserResetPasswordAPIView.as_view(), name='user-reset-password'),
     path('owners/<int:owner_id>/clubs/', views.get_owners_clubs, name='owner-clubs-list'),   #See all club fillter by owner id 
     path('user/places/', views.get_place_details, name='place-details'),
     path('clubs/<int:club_id>/reviews/', manage_club_reviews, name='manage-club-reviews'),
-    path('profile/music-preferences/', manage_music_preferences, name='manage-music-preferences'),
-    path('profile/ideal-vibes/', manage_ideal_vibes, name='manage-ideal-vibes'),
-    path('profile/crowd-atmosphere/', manage_crowd_atmosphere, name='manage-crowd-atmosphere'),
-    path('profile/nights-out/', manage_nights_out, name='manage-nights-out'),
+    path('manage_user_profile_preferences/', manage_user_profile_preferences, name='manage-ideal-vibes'),
     path('following/', FollowingPageView.as_view(), name='following-page'),
     path('users/<int:user_id>/toggle-follow/', FollowToggleView.as_view(), name='toggle-follow'),
     path('profile/', UserProfileView.as_view(), name='user-profile'), 
@@ -96,6 +93,13 @@ urlpatterns = [
     path('clubs/<int:club_id>/click/', views.club_click, name='club_click'),
     path('all-events/', get_all_events, name='get_all_events'),
     path('events/upcoming/', get_upcoming_events, name='upcoming-events'),
+    path('all-clubs/', get_all_clubs, name='get-all-clubs'),
+    path('clubs-filter/', get_clubs_by_type_post, name='get-clubs-by-type'),
+    path('clubs-nearby/', nearby_clubs, name='nearby-clubs'),
+    path('clubs/open-today/', nearby_currently_open_clubs, name='clubs-open-today'),
+    path('is_favourite/', favourite_clubs, name='clubs-en-today'),
+
+
 
 
 

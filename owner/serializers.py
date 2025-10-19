@@ -2,7 +2,6 @@
 from rest_framework import serializers
 from geopy.geocoders import Nominatim 
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable 
-
 from rest_framework import serializers
 from .models import ClubOwner
 from rest_framework.decorators import api_view
@@ -21,19 +20,12 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
 
 
     def validate_email(self, value):
-        """
-        Check that the email is not already in use.
-        """
         if ClubOwner.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("A user with this email address already exists.")
         return value
 
 
     def create(self, validated_data):
-        """
-        Create and return a new ClubOwner instance, with geocoded lat/lon.
-        """
- 
         geolocator = Nominatim(user_agent="your_unique_app_name") 
         full_address = f"{validated_data['venue_name']}, {validated_data['venue_city']}"
         
@@ -108,25 +100,17 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 
 # For  owner profile club 
-# api/serializers.py
 
 from rest_framework import serializers
 from .models import ClubProfile
-
 from rest_framework import serializers
 from .models import ClubProfile, ClubType, Vibes_Choice,ClubOwner
 
 
 
-
-# owner/serializers.py
-
 class CommaSeparatedPKField(serializers.Field):
- 
     def __init__(self, queryset, **kwargs):
         self.queryset = queryset
-        
-   
         super().__init__(**kwargs)
         
 
@@ -135,12 +119,9 @@ class CommaSeparatedPKField(serializers.Field):
         
 
     def to_internal_value(self, data):
-   
         if not isinstance(data, str):
             self.fail('invalid')
-
         id_strings = [s.strip() for s in data.split(',') if s.strip()]
-        
         try:
             ids = [int(id_str) for id_str in id_strings]
         except (ValueError, TypeError):
@@ -154,7 +135,6 @@ class CommaSeparatedPKField(serializers.Field):
             self.fail('does_not_exist', pk_value=', '.join(map(str, invalid_ids)))
 
         return found_objects
-
     def to_representation(self, value):
   
         return None
@@ -203,7 +183,6 @@ class ClubProfileSerializer(serializers.ModelSerializer):
                     validated_data['latitude'] = location.latitude
                     validated_data['longitude'] = location.longitude
             except Exception as e:
-                # Fail silently or log
                 print(f"Geocoding failed: {e}")
 
     def create(self, validated_data):
@@ -233,8 +212,6 @@ class VibesChoiceSerializer(serializers.ModelSerializer):
 
 
 # for weekly hours 
-# owner/serializers.py
-
 from rest_framework import serializers
 from .models import ClubProfile , Event
 import re
@@ -328,20 +305,9 @@ class LegalContentSerializer(serializers.ModelSerializer):
 
 
 
-
-
-# clubs/serializers.py
-# from rest_framework import serializers
-
-
-
-
-# write your review here
-
-
-
-
-
+#=============================================================================
+#=============================================================================
+#=========================================================================
 """************ For Custom User Authentication ************"""
 #=============================================================================
 #=============================================================================
@@ -373,7 +339,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password2')
         user = User.objects.create_user(**validated_data)
-        # is_active will be False by default as set in the model
         return user
 
 class VerifyOTPSerializer(serializers.Serializer):
@@ -401,7 +366,6 @@ class ResetPasswordWithOTPSerializer(serializers.Serializer):
 #=============================================================================
 #===========================================================================
 # for follow  & follwers
-# your_app/serializers.py
 from rest_framework import serializers
 from .models import User
 
@@ -435,11 +399,7 @@ class UserFollowSerializer(serializers.ModelSerializer):
             
             return 'follow'
         
-
-
-
-#=========================================================================================
-#=========================================================================================
+        
 #=========================================================================================
 # For user  recomendation data 
 #=========================================================================================

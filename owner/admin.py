@@ -3,10 +3,6 @@ from django.core.mail import send_mail
 from django.conf import settings
 from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice,UserProfile, Event , MusicGenre , Vibe ,CrowdAtmosphere
 
-
-
-
-
 admin.site.register(Vibe)
 admin.site.register(ClubType)
 admin.site.register(CrowdAtmosphere)
@@ -65,12 +61,9 @@ class ClubOwnerAdmin(admin.ModelAdmin):
 
     readonly_fields = ('last_login', 'date_joined')
 
-    def save_model(self, request, obj, form, change):
-        
+    def save_model(self, request, obj, form, change):   
         super().save_model(request, obj, form, change)
-
         if change and 'verification_status' in form.changed_data:
-         
                 subject = 'Your Club Registration Has Been Approved'
                 message = (
                     f'Dear {obj.full_name},\n\n'
@@ -88,7 +81,6 @@ class ClubOwnerAdmin(admin.ModelAdmin):
                 )
 
         elif obj.verification_status == 'rejected':
-    
                 subject = 'Update on Your Club Registration'
                 message = (
                     f'Dear {obj.full_name},\n\n'
@@ -106,10 +98,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
                     fail_silently=False,
                 )
 
-
-
-
-# For user 
+# For user admin.py *********
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import User

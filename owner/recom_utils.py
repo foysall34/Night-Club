@@ -1,4 +1,4 @@
-# apps/bars/utils.py
+
 from math import radians, sin, cos, sqrt, atan2, exp
 from typing import List
 

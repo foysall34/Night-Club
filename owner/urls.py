@@ -18,7 +18,7 @@ from .views import (
 urlpatterns = [
 #=============================================================================================
 #=============================================================================================
-#              Club Owner   ENDPOINTS               
+#              CLUB OWNER ENDPOINTS               
 #=============================================================================================
 #=============================================================================================
 
@@ -59,8 +59,7 @@ urlpatterns = [
 
 #=============================================================================================
 #=============================================================================================
-#=============================================================================================
-#                  Normal user ALL API    ENDPOINTS               
+#                  USER SIDE ENDPOINTS               
 #=============================================================================================
 #=============================================================================================
 
@@ -83,7 +82,7 @@ urlpatterns = [
     path('user/reset-password/', UserResetPasswordAPIView.as_view(), name='user-reset-password'),
     path('owners/<int:owner_id>/clubs/', views.get_owners_clubs, name='owner-clubs-list'),   #See all club fillter by owner id 
     path('user/places/', views.get_place_details, name='place-details'),
-    path('clubs/<int:club_id>/reviews/', manage_club_reviews, name='manage-club-reviews'),
+    path('clubs/<int:club_id>/reviews/', manage_club_reviews, name='manage-club-reviews'), #review
     path('manage_user_profile_preferences/', manage_user_profile_preferences, name='manage-ideal-vibes'),
     path('following/', FollowingPageView.as_view(), name='following-page'),
     path('users/<int:user_id>/toggle-follow/', FollowToggleView.as_view(), name='toggle-follow'),
@@ -98,6 +97,8 @@ urlpatterns = [
     path('clubs-nearby/', nearby_clubs, name='nearby-clubs'),
     path('clubs/open-today/', nearby_currently_open_clubs, name='clubs-open-today'),
     path('is_favourite/', favourite_clubs, name='clubs-en-today'),
+    path('edit-user-profile/' , update_user_profile , name='edit-user-profile'),
+    path('top-club-recommendation/' , top_recommended_club , name='top-club')
 
 
 

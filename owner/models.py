@@ -9,7 +9,6 @@ from django.contrib.contenttypes.models import ContentType
 
 # ==============================================================================
 # PART 1: CLUB OWNER MODELS
-# (This section remains the same as your original code)
 # ==============================================================================
 class ClubOwnerManager(BaseUserManager):
     def create_user(self, email, full_name, password=None, **extra_fields):
@@ -61,7 +60,7 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
     id_front_page = models.FileField(upload_to='proofs/ids/')
     id_back_page = models.FileField(upload_to='proofs/ids/')
     
-    # --- Status and OTP ---
+    # --- Status and OTP ---***********
     verification_status = models.CharField(
         max_length=10,
         choices=VERIFICATION_STATUS_CHOICES,
@@ -106,7 +105,6 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
 
 # ==============================================================================
 # PART 2: NEW - REGULAR USER MODELS
-# (This section is newly added for the 'User' role)
 # ==============================================================================
 
 class UserManager(BaseUserManager):
@@ -281,7 +279,6 @@ class Follow(models.Model):
 
 # ==============================================================================
 # PART 3: CLUB AND EVENT MODELS
-# (This section remains the same)
 # ==============================================================================
 
 class ClubType(models.Model):
@@ -341,10 +338,6 @@ class ClubProfile(models.Model):
 #  write Your review code here 
 
 
-
-
-
-
 class Event(models.Model):
     STATUS_CHOICES = (
         ('draft', 'Draft'),
@@ -370,7 +363,6 @@ class Event(models.Model):
 
 # ==============================================================================
 # PART 4: LEGAL CONTENT MODELS
-# (This section remains the same)
 # ==============================================================================
 
 class LegalContent(models.Model):

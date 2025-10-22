@@ -27,76 +27,82 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(ClubProfile)
 class ClubProfileAdmin(admin.ModelAdmin):
-    list_display = ('id', 'owner', 'clubName')
+    list_display = ('id', 'owner' , 'venue_name')
 
+
+import smtplib
+from django.core.mail import send_mail
+from django.conf import settings
+from django.contrib import messages
 
 @admin.register(ClubOwner)
 class ClubOwnerAdmin(admin.ModelAdmin):
-   
-    list_display = ( 'id', 'email', 'full_name', 'venue_name', 'venue_city' , 'verification_status', 'is_active')
+    list_display = ('id', 'email', 'full_name', 'venue_name', 'venue_city', 'verification_status', 'is_active')
     list_filter = ('verification_status', 'is_active', 'date_joined')
     search_fields = ('email', 'full_name', 'venue_name')
     ordering = ('-date_joined',)
-
-    fieldsets = (
-        ('Personal Information', {
-    
-            'fields': ('email', 'full_name', 'password', 'phone_number')
-        }),
-        ('Venue Information', {
-
-            'fields': ('venue_name','venue_city' ,'latitude', 'longitude')
-        }),
-        ('Status and Permissions', {
-            'fields': ('verification_status', 'is_active', 'is_staff')
-        }),
-        ('Verification Documents', {
-            'fields': ('profile_image', 'id_front_page', 'id_back_page')
-        }),
-        ('Important Dates', {
-            'fields': ('last_login', 'date_joined')
-        }),
-
-    )
-
     readonly_fields = ('last_login', 'date_joined')
 
-    def save_model(self, request, obj, form, change):   
+    fieldsets = (
+        ('Personal Information', {'fields': ('email', 'full_name', 'password', 'phone_number')}),
+        ('Venue Information', {'fields': ('venue_name', 'venue_city', 'latitude', 'longitude')}),
+        ('Status and Permissions', {'fields': ('verification_status', 'is_active', 'is_staff')}),
+        ('Verification Documents', {'fields': ('proof_doc', 'id_front_page', 'id_back_page')}),
+        ('Important Dates', {'fields': ('last_login', 'date_joined')}),
+    )
+
+    def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+
         if change and 'verification_status' in form.changed_data:
-                subject = 'Your Club Registration Has Been Approved'
-                message = (
-                    f'Dear {obj.full_name},\n\n'
-                    f'We are pleased to inform you that your registration for the club "{obj.venue_name}" has been successfully approved. '
-                    'You can now enjoy all the features of our platform.\n\n'
-                    'Best regards,\n'
-                    'The Team'
-                )
+            try:
+                if obj.verification_status == 'approved':
+                    subject = 'Your Club Registration Has Been Approved'
+                    message = (
+                        f'Dear {obj.full_name},\n\n'
+                        f'We are pleased to inform you that your registration for the club "{obj.venue_name}" has been successfully approved. '
+                        'You can now enjoy all the features of our platform.\n\n'
+                        'Best regards,\nThe Team'
+                    )
+                elif obj.verification_status == 'rejected':
+                    subject = 'Update on Your Club Registration'
+                    message = (
+                        f'Dear {obj.full_name},\n\n'
+                        f'We are writing to inform you that after reviewing your application for "{obj.venue_name}", '
+                        'we are unable to approve your registration at this time.\n\n'
+                        'If you have any questions, please contact our support team.\n\n'
+                        'Best regards,\nThe Team'
+                    )
+                else:
+                    return
+
                 send_mail(
                     subject,
                     message,
                     settings.DEFAULT_FROM_EMAIL,
                     [obj.email],
                     fail_silently=False,
+                )
+                self.message_user(request, "Email notification sent successfully.", messages.SUCCESS)
+
+            except smtplib.SMTPRecipientsRefused as e:
+                self.message_user(
+                    request,
+                    f"Email not sent — recipient’s mailbox is temporarily unavailable: {e}",
+                    messages.WARNING
                 )
 
-        elif obj.verification_status == 'rejected':
-                subject = 'Update on Your Club Registration'
-                message = (
-                    f'Dear {obj.full_name},\n\n'
-                    f'We are writing to inform you that after reviewing your application for "{obj.venue_name}", '
-                    'we are unable to approve your registration at this time.\n\n'
-                    'If you have any questions, please contact our support team.\n\n'
-                    'Best regards,\n'
-                    'The Team'
+            except Exception as e:
+                self.message_user(
+                    request,
+                    f"Unexpected error sending email: {e}",
+                    messages.ERROR
                 )
-                send_mail(
-                    subject,
-                    message,
-                    settings.DEFAULT_FROM_EMAIL,
-                    [obj.email],
-                    fail_silently=False,
-                )
+
+
+
+
+
 
 # For user admin.py *********
 from django.contrib import admin

@@ -5,6 +5,9 @@ from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
 from rest_framework import serializers
 from .models import ClubOwner
 from rest_framework.decorators import api_view
+from django.core.files.base import ContentFile
+from django.conf import settings
+import os
 
 class ClubOwnerRegistrationSerializer(serializers.Serializer):
     full_name = serializers.CharField(required=True)
@@ -13,40 +16,30 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
     phone_number = serializers.CharField(required=True)
     venue_name = serializers.CharField(required=True)
     venue_city = serializers.CharField(required=True)
-    proof_doc=serializers.FileField(required= True)
-    profile_image = serializers.FileField(required=True)
+    proof_doc = serializers.FileField(required=True)
+    profile_image=serializers.FileField(required= True)
     id_front_page = serializers.FileField(required=True)
     id_back_page = serializers.FileField(required=True)
 
-
     def validate_email(self, value):
         if ClubOwner.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("A user with this email address already exists.")
+            raise serializers.ValidationError("your email exist . please press re-send otp.")
         return value
 
-
     def create(self, validated_data):
-        geolocator = Nominatim(user_agent="your_unique_app_name") 
+        # Step 1: Geocode location
+        geolocator = Nominatim(user_agent="night_club_app")
         full_address = f"{validated_data['venue_name']}, {validated_data['venue_city']}"
-        
-       
-        lat = None
-        lon = None
-        try:
-            location = geolocator.geocode(full_address, timeout=10) 
-            if location:
-                lat = location.latitude
-                lon = location.longitude
-                
-                print(f"Coordinates found for {full_address}: ({lat}, {lon})")
-            else:
-                print(f"Could not find coordinates for: {full_address}")
-        except (GeocoderTimedOut, GeocoderUnavailable) as e:
-            print(f"Geocoding service error: {e}")
-        except Exception as e:
-            print(f"An unexpected error occurred during geocoding: {e}")
 
-       
+        lat, lon = None, None
+        try:
+            location = geolocator.geocode(full_address, timeout=10)
+            if location:
+                lat, lon = location.latitude, location.longitude
+        except (GeocoderTimedOut, GeocoderUnavailable) as e:
+            print(f"Geocoding error: {e}")
+
+        #  Step 2: Create ClubOwner
         user = ClubOwner.objects.create_user(
             email=validated_data['email'],
             full_name=validated_data['full_name'],
@@ -54,15 +47,49 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
             phone_number=validated_data['phone_number'],
             venue_name=validated_data['venue_name'],
             venue_city=validated_data['venue_city'],
-            proof_doc=validated_data['proof_doc'],
             profile_image=validated_data['profile_image'],
+            proof_doc=validated_data['proof_doc'],
             id_front_page=validated_data['id_front_page'],
             id_back_page=validated_data['id_back_page'],
-            latitude=lat,  
-            longitude=lon  
+            latitude=lat,
+            longitude=lon
         )
-        print(user.latitude, user.longitude)  
+
+        #  Step 3: Check if venue already exists
+        existing_club = ClubProfile.objects.filter(venue_name__iexact=validated_data['venue_name']).first()
+
+        if existing_club:
+           
+            existing_club.owner = user
+            existing_club.save()
+            print(f"Existing ClubProfile linked with {user.email}")
+        else:
+    
+            default_image_path = os.path.join(settings.MEDIA_ROOT, 'defaults/default_club.jpg')
+
+            club_profile = ClubProfile.objects.create(
+                owner=user,
+                venue_name=validated_data['venue_name'],
+                venue_city=validated_data['venue_city'],
+                club_location=validated_data['venue_city'],
+                latitude=lat,
+                longitude=lon,
+                email=validated_data['email'],
+                phone=validated_data['phone_number'],
+            )
+
+    
+            if os.path.exists(default_image_path):
+                with open(default_image_path, 'rb') as f:
+                    club_profile.clubImageUrl.save('default_club.jpg', ContentFile(f.read()), save=True)
+
+            print(f"New ClubProfile created for {user.email}")
+
         return user
+
+
+
+
 
 
 
@@ -211,6 +238,13 @@ class VibesChoiceSerializer(serializers.ModelSerializer):
         fields = ['id', 'name']
 
 
+
+class MyClubProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClubProfile
+        fields = '__all__'
+
+
 # for weekly hours 
 from rest_framework import serializers
 from .models import ClubProfile , Event
@@ -252,6 +286,14 @@ class WeeklyHoursSerializer(serializers.ModelSerializer):
 """************ For Event & Legal Content ************"""
 
 
+
+
+class EventSerializered(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = ['id', 'name', 'date', 'time', 'entry_fee', 'status', 'created_at']
+
+
 class OwnerClubSerializer(serializers.ModelSerializer):
  
     class Meta:
@@ -260,27 +302,7 @@ class OwnerClubSerializer(serializers.ModelSerializer):
 
 
 
-class EventSerializer(serializers.ModelSerializer):
-   
- 
-    club_name = serializers.StringRelatedField(source='club', read_only=True)
 
-    class Meta:
-        model = Event
-        fields = ['id', 'club', 'club_name', 'name', 'date', 'time', 'entry_fee', 'status', 'created_at']
-        extra_kwargs = {
-            'club': {'write_only': True} 
-        }
-
-    def __init__(self, *args, **kwargs):
-    
-        super().__init__(*args, **kwargs)
-        
-        request = self.context.get('request')
-        if request and hasattr(request, 'user'):
-            owner = request.user
-  
-            self.fields['club'].queryset = ClubProfile.objects.filter(owner=owner)
 
 
 
@@ -291,6 +313,22 @@ class Get_all_EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = '__all__' 
+
+
+from rest_framework import serializers
+from .models import Event
+
+class EventSerializer(serializers.ModelSerializer):
+    club_name = serializers.CharField(source='club.clubName', read_only=True)
+    owner_name = serializers.CharField(source='club.owner.full_name', read_only=True)
+
+    class Meta:
+        model = Event
+        fields = ['id', 'name', 'club_name', 'owner_name', 'date', 'time', 'entry_fee', 'status', 'created_at']
+
+
+
+
 
 
 from rest_framework import serializers
@@ -399,7 +437,7 @@ class UserFollowSerializer(serializers.ModelSerializer):
             
             return 'follow'
         
-        
+
 #=========================================================================================
 # For user  recomendation data 
 #=========================================================================================

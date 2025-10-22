@@ -241,33 +241,208 @@ from .serializers import ClubProfileSerializer
 from rest_framework_simplejwt.authentication import JWTAuthentication
 # View for listing all clubs and creating a new one
 from .authentications import ClubOwnerAuthentication
-from .serializers import ClubProfileSerializer
+from .serializers import ClubProfileSerializer , MyClubProfileSerializer
 from rest_framework.decorators import api_view 
 
 
+class ClubProfileByEmailView(APIView):
+    """
+    View to handle ClubProfile fetch and update by owner's email.
+    Supports GET, POST, and PATCH requests.
+    """
 
-class ClubProfileListCreateAPIView(APIView):
-    authentication_classes = [ClubOwnerAuthentication]
-    permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
+    def get(self, request):
+        """
+        GET: Retrieve club profile by owner's email via query parameter
+        Example: /api/club-profile-by-email/?email=example@gmail.com
+        """
+        email = request.query_params.get('email')
+        if not email:
+            return Response({"error": "Email is required as a query parameter."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
-    def get(self, request, *args, **kwargs):
-      
-        user_profiles = ClubProfile.objects.filter(owner=request.user)
-        serializer = ClubProfileSerializer(user_profiles, many=True)
+        owner = get_object_or_404(ClubOwner, email=email)
+        profile = get_object_or_404(ClubProfile, owner=owner)
+        serializer = MyClubProfileSerializer(profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
+        """
+        POST: Get club profile by owner's email (from request body)
+        """
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            owner = ClubOwner.objects.get(email=email)
+        except ClubOwner.DoesNotExist:
+            return Response({"error": "Owner not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            profile = ClubProfile.objects.get(owner=owner)
+        except ClubProfile.DoesNotExist:
+            return Response({"error": "ClubProfile not found for this owner."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = MyClubProfileSerializer(profile)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        """
+        PATCH: Update club profile by owner's email
+        """
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        owner = get_object_or_404(ClubOwner, email=email)
+        profile = get_object_or_404(ClubProfile, owner=owner)
+
+        serializer = MyClubProfileSerializer(profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+
+class EventsByOwnerEmailView(APIView):
+    """
+    Handle events related to a specific ClubOwner using their email.
     
-        serializer = ClubProfileSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        
-        success_data = {
-            "message": "Club Profile created successfully!",
-            "club_details": serializer.data
-        }
-        return Response(success_data, status=status.HTTP_201_CREATED)
+    POST:
+      - If only 'email' is provided: returns all events for that owner.
+      - If 'email' + event details are provided: creates a new event.
+
+    GET:
+      - ?email=<email> → returns all events for the owner
+      - ?email=<email>&event_id=<id> → returns single event
+
+    PATCH:
+      - Partial update an event using 'email' + 'event_id'
+
+    DELETE:
+      - Delete an event using 'email' + 'event_id'
+    """
+
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        owner = get_object_or_404(ClubOwner, email=email)
+        club_profiles = ClubProfile.objects.filter(owner=owner)
+
+        if not club_profiles.exists():
+            return Response({"error": "No club profile found for this owner."}, status=status.HTTP_404_NOT_FOUND)
+
+        name = request.data.get('name')
+        date = request.data.get('date')
+        time = request.data.get('time')
+
+        # Create event
+        if name and date and time:
+            club = club_profiles.first()
+            serializer = EventSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(club=club)
+                return Response({
+                    "message": "Event created successfully!",
+                    "created_event": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Otherwise, return all events for that owner
+        events = Event.objects.filter(club__in=club_profiles).order_by('-date', '-time')
+        serializer = EventSerializer(events, many=True)
+        return Response({
+            "owner_email": email,
+            "total_events": events.count(),
+            "events": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def get(self, request):
+        """
+        GET: Retrieve events by owner email (and optionally by event_id)
+        """
+        email = request.query_params.get('email')
+        event_id = request.query_params.get('event_id')
+
+        if not email:
+            return Response({"error": "Email parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        owner = get_object_or_404(ClubOwner, email=email)
+        club_profiles = ClubProfile.objects.filter(owner=owner)
+
+        if not club_profiles.exists():
+            return Response({"error": "No club profile found for this owner."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Fetch single event if event_id provided
+        if event_id:
+            event = get_object_or_404(Event, id=event_id, club__in=club_profiles)
+            serializer = EventSerializer(event)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # Otherwise, list all events
+        events = Event.objects.filter(club__in=club_profiles).order_by('-date', '-time')
+        serializer = EventSerializer(events, many=True)
+        return Response({
+            "owner_email": email,
+            "total_events": events.count(),
+            "events": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        """
+        PATCH: Update an existing event (by event_id + email)
+        """
+        email = request.data.get('email')
+        event_id = request.data.get('event_id')
+
+        if not email or not event_id:
+            return Response({"error": "Both 'email' and 'event_id' are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        owner = get_object_or_404(ClubOwner, email=email)
+        club_profiles = ClubProfile.objects.filter(owner=owner)
+
+        event = get_object_or_404(Event, id=event_id, club__in=club_profiles)
+        serializer = EventSerializer(event, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "Event updated successfully.",
+                "updated_event": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        """
+        DELETE: Delete an event (by event_id + email)
+        """
+        email = request.query_params.get('email') or request.data.get('email')
+        event_id = request.query_params.get('event_id') or request.data.get('event_id')
+
+        if not email or not event_id:
+            return Response({"error": "Both 'email' and 'event_id' are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        owner = get_object_or_404(ClubOwner, email=email)
+        club_profiles = ClubProfile.objects.filter(owner=owner)
+
+        event = get_object_or_404(Event, id=event_id, club__in=club_profiles)
+        event.delete()
+        return Response({"message": "Event deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+
+
+
+
 
 class ClubProfileRetrieveUpdateDestroyAPIView(APIView):
     authentication_classes = [ClubOwnerAuthentication]
@@ -371,22 +546,62 @@ class OwnerClubListAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class EventListCreateAPIView(APIView):
-    authentication_classes = [ClubOwnerAuthentication]
-    permission_classes = [IsAuthenticated]
+# class EventListCreateAPIView(APIView):
+#     authentication_classes = [ClubOwnerAuthentication]
+#     permission_classes = [IsAuthenticated]
 
-    def get(self, request, *args, **kwargs):
+#     def get(self, request, *args, **kwargs):
    
-        events = Event.objects.filter(club__owner=request.user)
-        serializer = EventSerializer(events, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+#         events = Event.objects.filter(club__owner=request.user)
+#         serializer = EventSerializer(events, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def post(self, request, *args, **kwargs):
+#     def post(self, request, *args, **kwargs):
     
-        serializer = EventSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         serializer = EventSerializer(data=request.data, context={'request': request})
+#         serializer.is_valid(raise_exception=True)
+#         serializer.save()
+#         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+
+
+
+from .models import Event
+from .models import ClubProfile  
+from .serializers import EventSerializer  
+from rest_framework.decorators import permission_classes
+
+@api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+def get_owner_events(request, owner_id):
+    """
+    Get all events under a specific club owner.
+    """
+    # Get all clubs owned by this owner
+    clubs = ClubProfile.objects.filter(owner_id=owner_id)
+    if not clubs.exists():
+        return Response({"message": "No clubs found for this owner"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Get all events for those clubs
+    events = Event.objects.filter(club__in=clubs).order_by('-date', '-time')
+    if not events.exists():
+        return Response({"message": "No events found for this owner"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = EventSerializer(events, many=True)
+    return Response({"total_events": len(serializer.data), "events": serializer.data}, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @api_view(['GET'])
@@ -406,34 +621,74 @@ def get_upcoming_events(request):
     serializer = Get_all_EventSerializer(events, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
-class EventRetrieveUpdateDestroyAPIView(APIView):
-    authentication_classes = [ClubOwnerAuthentication]
-    permission_classes = [IsAuthenticated]
 
-    def get_object(self, pk, user):
-     
-        try:
- 
-            return Event.objects.get(pk=pk, club__owner=user)
-        except Event.DoesNotExist:
-            raise Http404
 
-    def get(self, request, pk, *args, **kwargs):
-        event = self.get_object(pk, request.user)
-        serializer = EventSerializer(event)
-        return Response(serializer.data)
+#Club Profile views
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 
-    def patch(self, request, pk, *args, **kwargs):
-        event = self.get_object(pk, request.user)
-        serializer = EventSerializer(event, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def club_detail_update(request, club_id):
+    """
+    GET -> Club details with average rating & reviews
+    PATCH -> Update clubName and clubImageUrl
+    """
+    club = get_object_or_404(ClubProfile, id=club_id)
 
-    def delete(self, request, pk, *args, **kwargs):
-        event = self.get_object(pk, request.user)
-        event.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    if request.method == 'GET':
+        reviews_data = club.reviews if isinstance(club.reviews, list) else []
+
+        # calculate average rating
+        if reviews_data:
+            total_rating = sum(float(r.get('rating', 0)) for r in reviews_data)
+            avg_rating = round(total_rating / len(reviews_data), 1)
+        else:
+            avg_rating = 0.0
+
+        response_data = {
+            "id": club.id,
+            "clubName": club.clubName,
+            "clubImageUrl": club.clubImageUrl.url if club.clubImageUrl else None,
+            "insta_link": club.insta_link,
+            "tiktok_link": club.tiktok_link,
+            "phone": club.phone,
+            "email": club.email,
+            "average_rating": avg_rating,
+            "total_reviews": len(reviews_data),
+            "reviews": reviews_data,
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+    elif request.method == 'PATCH':
+        club_name = request.data.get('clubName')
+        image = request.FILES.get('clubImageUrl')
+
+        if club_name:
+            club.clubName = club_name
+
+        if image:
+            fs = FileSystemStorage()
+            filename = fs.save(image.name, image)
+            club.clubImageUrl = filename
+
+        club.save()
+
+        return Response({"message": "Club updated successfully"}, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
+
+
 
 # api/views.py
 
@@ -486,36 +741,57 @@ from .serializers import WeeklyHoursSerializer
 from .models import ClubProfile
 
 class WeeklyHoursAPIView(APIView):
-    authentication_classes = [ClubOwnerAuthentication]
-    permission_classes = [IsAuthenticated]
+    """
+    GET:
+        - Provide 'email' in request body or query params.
+        - Returns weekly hours for the owner's last ClubProfile.
+    PATCH:
+        - Provide 'email' and 'weekly_hours' data to update.
+    """
 
-    def get_object(self, user):
-     
-        profiles = ClubProfile.objects.filter(owner=user)
+    def get_object(self, email):
+        try:
+            owner = ClubOwner.objects.get(email=email)
+        except ClubOwner.DoesNotExist:
+            raise Http404("Owner not found with this email.")
 
+        profiles = ClubProfile.objects.filter(owner=owner)
         if not profiles.exists():
             raise Http404("Club Profile not found for this owner.")
-        
 
         return profiles.last()
 
     def get(self, request, *args, **kwargs):
-        club_profile = self.get_object(request.user)
+        email = request.query_params.get('email') or request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        club_profile = self.get_object(email)
         serializer = WeeklyHoursSerializer(club_profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request, *args, **kwargs):
-        club_profile = self.get_object(request.user)
-        serializer = WeeklyHoursSerializer(club_profile, data=request.data, partial=True)
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        club_profile = self.get_object(email)
+        weekly_hours_data = request.data.get('weekly_hours')
+
+        if not weekly_hours_data:
+            return Response({"error": "weekly_hours data is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = WeeklyHoursSerializer(
+            club_profile, data={"weekly_hours": weekly_hours_data}, partial=True
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
         success_data = {
             "message": "Weekly hours updated successfully!",
-            "weekly_hours": serializer.data['weekly_hours']
+            "weekly_hours": serializer.data.get('weekly_hours')
         }
         return Response(success_data, status=status.HTTP_200_OK)
-    
 
 
 

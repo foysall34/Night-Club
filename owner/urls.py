@@ -30,18 +30,27 @@ urlpatterns = [
     path('owner/forgot-password/', OwnerForgotPasswordView.as_view(), name='forgot-password'),
     path('owner/reset-password/', OwnerPasswordResetView.as_view(), name='owner-reset-password'),
     # path('owner/change-password/', OwnerChangePasswordView.as_view(), name='change-password'),
-    path('owner/clubs/', ClubProfileListCreateAPIView.as_view(), name='club-list-create'),
-    path('owner/club-profiles/<int:pk>/', ClubProfileListCreateAPIView.as_view(), name='club-profile-detail'),
+
+# -----------------------   CLUB OWNER DETAILS API  -----------------
+    path('owner/club-profile/', ClubProfileByEmailView.as_view(), name='club-profile-by-email'),
+    path('events/by-owner-email/', EventsByOwnerEmailView.as_view(), name='events-by-owner-email'),
+
     path('owner/legal-content/<slug:type_slug>/', LegalContentView.as_view(), name='legal-content'),
     path('owner/club-profile/weekly-hours/', WeeklyHoursAPIView.as_view(), name='club-profile-weekly-hours'),
-    path('owner/events/', EventListCreateAPIView.as_view(), name='event-list-create'),
-    path('owner/events/<int:pk>/', EventRetrieveUpdateDestroyAPIView.as_view(), name='event-detail'),
+    # path('owner/events/', EventListCreateAPIView.as_view(), name='event-list-create'),
+
+
+  
     path('club-recomend-info/<int:pk>/', ClubDetailView.as_view(), name='club-detail'),
     path('owner/dashborad-status/', DashboardStatsView.as_view(), name='club-detail'),
     path('owner/anlytical-dashborad-status/', AnalyticalDashboard.as_view(), name='club-'),
 
     path('owner/club-types/', ClubTypeListAPIView.as_view(), name='club-type-list'),
     path('owner/vibes-choices/', VibesChoiceListAPIView.as_view(), name='vibes-choice-list'),
+    path('owner/<int:owner_id>/events/', get_owner_events, name='get_owner_events'), # search by clubowner id 
+    path('club/<int:club_id>/', club_detail_update, name='club_detail_update'), # edit club profile
+ 
+ 
     
 
 

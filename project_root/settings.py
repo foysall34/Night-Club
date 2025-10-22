@@ -95,6 +95,10 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 
 
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "https://category-pose-donations-plants.trycloudflare.com"
+]
 
 
 from datetime import timedelta
@@ -167,8 +171,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# --- এই লাইনটি যোগ করুন ---
-# This folder will temporarily store files during the OTP verification process
+
 TEMP_MEDIA_ROOT = os.path.join(BASE_DIR, 'temp_media')
 
 # Static files (CSS, JavaScript, Images)

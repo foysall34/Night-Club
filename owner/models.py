@@ -42,7 +42,7 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
         ('pending', 'Pending'),
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
-    )
+    )      
 
     # --- Profile Information ---
     full_name = models.CharField(max_length=255)
@@ -56,7 +56,7 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
 
     # --- Verification Documents ---
     proof_doc = models.FileField(upload_to='proofs/images/' , default='upload file')
-    profile_image = models.FileField(upload_to='proofs/images/')
+    profile_image = models.FileField(upload_to='profile/images/' , default='profile-image')
     id_front_page = models.FileField(upload_to='proofs/ids/')
     id_back_page = models.FileField(upload_to='proofs/ids/')
     
@@ -305,8 +305,9 @@ def get_default_weekly_hours():
     }
 
 class ClubProfile(models.Model):
-    owner = models.ForeignKey(ClubOwner, on_delete=models.CASCADE, related_name='club_profile', null=True)
-    clubName = models.CharField(max_length=255, blank=True, null=True)
+    owner = models.OneToOneField(ClubOwner, on_delete=models.CASCADE, related_name='club_profile', null=True)
+    venue_name = models.CharField(max_length=255 , default='club_name')
+    venue_city = models.CharField(max_length=100 , default='write city')
     club_type = models.ManyToManyField(ClubType, blank=True)
     vibes_type = models.ManyToManyField(Vibes_Choice, blank=True)
     dressCode = models.CharField(max_length=255, blank=True)
@@ -330,7 +331,7 @@ class ClubProfile(models.Model):
     email =models.CharField(null= True, blank=True)
 
     def __str__(self):
-        return self.clubName or f"Unnamed Club (ID: {self.id})"
+        return self.email or f"Unnamed Club (ID: {self.id})"
     
 
 
@@ -356,7 +357,7 @@ class Event(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.name} at {self.club.clubName}"
+        return f"{self.name} at {self.club.email}"
 
     class Meta:
         ordering = ['-date', '-time']

@@ -244,7 +244,6 @@ from .authentications import ClubOwnerAuthentication
 from .serializers import ClubProfileSerializer , MyClubProfileSerializer
 from rest_framework.decorators import api_view 
 
-
 class ClubProfileByEmailView(APIView):
     """
     View to handle ClubProfile fetch and update by owner's email.
@@ -274,22 +273,22 @@ class ClubProfileByEmailView(APIView):
         if not email:
             return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            owner = ClubOwner.objects.get(email=email)
-        except ClubOwner.DoesNotExist:
-            return Response({"error": "Owner not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        try:
-            profile = ClubProfile.objects.get(owner=owner)
-        except ClubProfile.DoesNotExist:
-            return Response({"error": "ClubProfile not found for this owner."}, status=status.HTTP_404_NOT_FOUND)
-
+        owner = get_object_or_404(ClubOwner, email=email)
+        profile = get_object_or_404(ClubProfile, owner=owner)
         serializer = MyClubProfileSerializer(profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request):
         """
-        PATCH: Update club profile by owner's email
+        PATCH: Update club profile by owner's email.
+        Accepts multiple IDs for club_type and vibes_type.
+        Example JSON:
+        {
+          "email": "owner@example.com",
+          "club_type": [1, 2, 3],
+          "vibes_type": [4, 5],
+          "venue_name": "New Club Name"
+        }
         """
         email = request.data.get('email')
         if not email:
@@ -298,12 +297,32 @@ class ClubProfileByEmailView(APIView):
         owner = get_object_or_404(ClubOwner, email=email)
         profile = get_object_or_404(ClubProfile, owner=owner)
 
-        serializer = MyClubProfileSerializer(profile, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        # Pop ManyToMany fields from request safely
+        club_type_ids = request.data.pop('club_type', None)
+        vibes_type_ids = request.data.pop('vibes_type', None)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Update normal fields first
+        serializer = MyClubProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        # Update ManyToMany fields separately
+        if club_type_ids is not None:
+            profile.club_type.set(ClubType.objects.filter(id__in=club_type_ids))
+        if vibes_type_ids is not None:
+            profile.vibes_type.set(Vibes_Choice.objects.filter(id__in=vibes_type_ids))
+
+        profile.save()
+
+        # Return updated data
+        updated_serializer = MyClubProfileSerializer(profile)
+        return Response(
+            {
+                "message": "Club profile updated successfully.",
+                "data": updated_serializer.data,
+            },
+            status=status.HTTP_200_OK
+        )
 
 
 
@@ -740,6 +759,9 @@ from .authentications import ClubOwnerAuthentication
 from .serializers import WeeklyHoursSerializer
 from .models import ClubProfile
 
+from rest_framework.permissions import IsAuthenticated
+# authentication_classes = [ClubOwnerAuthentication]
+permission_classes = [IsAuthenticated]
 class WeeklyHoursAPIView(APIView):
     """
     GET:

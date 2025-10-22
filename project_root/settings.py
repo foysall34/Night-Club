@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     # app 
     'myapp' ,
     'owner',
+    'subscriptions',
   
 
     # framework 
@@ -49,6 +50,29 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+
+# settings.py (add these)
+import os
+
+STRIPE_API_KEY = config("STRIPE_API_KEY")
+STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET")
+
+
+
+STRIPE_PRICE_IDS = {
+    "starter_monthly": "price_1SKuaoCk78tT87fWg4orhRlP",
+    "starter_yearly":  "price_XXXXXXXXXXXX_yearly",
+    "pro_monthly":     "price_1SKucpCk78tT87fWI95Yy8q8",
+    "pro_yearly":      "price_YYYYYYYYYYYY_yearly",
+   
+}
+
+
+STRIPE_COUPONS = {
+    "FOMO50": "coupon_XXXXXXXXX"
+}
+
 
 
 AUTH_USER_MODEL = 'owner.User'

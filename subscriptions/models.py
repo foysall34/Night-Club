@@ -8,9 +8,9 @@ class Plan(models.Model):
         ('pro', 'Pro'),
     ]
 
-    key = models.CharField(max_length=20, choices=PLAN_CHOICES, unique=True)
+    plan_type = models.CharField(max_length=20, choices=PLAN_CHOICES, unique=True)
     name = models.CharField(max_length=100)
-    description = models.TextField(blank=True)
+    features = models.TextField(blank=True)
 
     # Stripe price mapping
     stripe_monthly_price_id = models.CharField(max_length=255, blank=True, null=True)
@@ -21,7 +21,7 @@ class Plan(models.Model):
     yearly_price_usd = models.DecimalField(max_digits=7, decimal_places=2, default=0.00)
 
     # Feature control
-    max_live_events = models.IntegerField(null=True, blank=True)  # None = unlimited
+    max_live_events = models.IntegerField(null=True, blank=True)  
     admin_seats = models.IntegerField(default=1)
     boost_credits_per_month = models.IntegerField(default=0)
     leads_enabled = models.BooleanField(default=False)
@@ -49,7 +49,7 @@ class Plan(models.Model):
 from django.db import models
 from django.utils import timezone
 from owner.models import ClubOwner
-from .models import Plan  # same file or adjust import
+from .models import Plan  
 import uuid
 
 class Subscription(models.Model):
@@ -94,7 +94,7 @@ class Subscription(models.Model):
 
 
 
-# subscriptions/models.py
+
 class Coupon(models.Model):
     code = models.CharField(max_length=50, unique=True)  # e.g., FOMO50
     stripe_coupon_id = models.CharField(max_length=255, blank=True, null=True)

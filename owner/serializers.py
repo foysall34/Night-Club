@@ -407,35 +407,29 @@ class ResetPasswordWithOTPSerializer(serializers.Serializer):
 from rest_framework import serializers
 from .models import User
 
+
 class UserFollowSerializer(serializers.ModelSerializer):
-
-
+    full_name = serializers.SerializerMethodField()
     follow_status = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'full_name', 'email', 'follow_status'] 
+        fields = ["id", "full_name", "email", "follow_status"]
+
+    def get_full_name(self, obj):
+        full_name = getattr(obj, "full_name", None)
+        if full_name:
+            return full_name
+        # fallback for users without .full_name field
+        return f"{obj.first_name} {obj.last_name}".strip() or "Unnamed User"
 
     def get_follow_status(self, obj):
-     
-        request_user = self.context.get('request').user
-        if not request_user.is_authenticated or request_user == obj:
-            return None 
-
-       
-        is_following = request_user.following.filter(pk=obj.pk).exists()
-
-        is_followed_by = request_user.followers.filter(pk=obj.pk).exists()
-
-        if is_following:
-   
-            return 'unfollow'
-        elif is_followed_by:
-        
-            return 'follow_back'
-        else:
-            
-            return 'follow'
+        """Check if the requesting/current user already follows this user"""
+        request = self.context.get("request")
+        current_user = self.context.get("current_user")
+        if not current_user:
+            return None
+        return obj.followers.filter(id=current_user.id).exists()
         
 
 #=========================================================================================
@@ -573,4 +567,58 @@ class ClubDetailSerializer(serializers.ModelSerializer):
             'features',
             'events',
             'practical_info', 
+        ]
+
+
+
+from rest_framework import serializers
+from .models import UserProfile
+class UserProfileSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_name = serializers.EmailField(source='user.full_name', read_only=True)
+    user_img = serializers.ImageField(read_only=True)
+    
+    music_preferences = serializers.SlugRelatedField(
+        many=True, slug_field='name', read_only=True
+    )
+    ideal_vibes = serializers.SlugRelatedField(
+        many=True, slug_field='name', read_only=True
+    )
+    crowd_atmosphere = serializers.SlugRelatedField(
+        many=True, slug_field='name', read_only=True
+    )
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            'id',
+            'user_email',
+            'user_name' , 
+            'user_img',
+            'city',
+            'latitude',
+            'longitude',
+            'about',
+            'music_preferences',
+            'ideal_vibes',
+            'crowd_atmosphere',
+            'is_online',
+            'achievement',
+            'followers',
+            'created_at'
+        ]
+
+
+
+class ClubProfileSerializered(serializers.ModelSerializer):
+    owner_email = serializers.EmailField(source='owner.email', read_only=True)
+
+    class Meta:
+        model = ClubProfile
+        fields = [
+            'id',
+            'venue_name',
+            'venue_city',
+            'click_count',
+            'owner_email',
         ]

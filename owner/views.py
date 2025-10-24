@@ -633,11 +633,29 @@ def get_all_events(request):
 
 @api_view(['GET'])
 def get_upcoming_events(request):
+    print("\n========== [DEBUG] get_upcoming_events Called ==========")
+
+    # Step 1️⃣: Get today's date
     today = timezone.now().date()
-    events = Event.objects.filter(created_at__date__gte=today).order_by('date', 'time')
+    print(f"[DEBUG] Today's date: {today}")
 
+    # Step 2️⃣: Filter all events happening today or later
+    events = Event.objects.filter(date__gte=today).order_by('date', 'time')
+    print(f"[DEBUG] Total events found (from today onwards): {events.count()}")
 
-    serializer = Get_all_EventSerializer(events, many=True)
+    # Step 3️⃣: Separate today's and future events
+    today_events = events.filter(date=today)
+    upcoming_events = events.filter(date__gt=today)
+
+    print(f"[DEBUG] Today's events: {today_events.count()} | Future events: {upcoming_events.count()}")
+
+    # Step 4️⃣: Merge today's events first, then future ones
+    combined_events = list(today_events) + list(upcoming_events)
+
+    # Step 5️⃣: Serialize and respond
+    serializer = Get_all_EventSerializer(combined_events, many=True)
+    print(f"[INFO] Returning {len(serializer.data)} total upcoming events (today first).")
+
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -1081,15 +1099,50 @@ def get_place_details(request):
 
 
 
-from rest_framework.decorators import api_view, permission_classes
-from django.shortcuts import get_object_or_404
-@api_view(['GET'])
-def get_owners_clubs(request, owner_id):
-    owner = get_object_or_404(ClubOwner, id=owner_id)
-    clubs = ClubProfile.objects.filter(owner=owner)
-    serializer = ClubProfileSerializer(clubs, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+
+from .models import ClubProfile
+
+
+class AllClubListView(APIView):
+ 
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        clubs = ClubProfile.objects.all()
+
+        if not clubs.exists():
+            return Response(
+                {"message": "No clubs found"},
+                status=status.HTTP_200_OK
+            )
+
+        data = []
+        for club in clubs:
+            data.append({
+                "id": club.id,
+                "club_name": club.venue_name,
+                "venue_city": club.venue_city,
+                "about": club.about,
+                "coverCharge": club.coverCharge,
+                "ageRequirement": club.ageRequirement,
+                "latitude": club.latitude,
+                "longitude": club.longitude,
+                "club_type": [ct.name for ct in club.club_type.all()],
+                "vibes": [v.name for v in club.vibes_type.all()],
+                "features": club.features,
+                "image": club.clubImageUrl.url if club.clubImageUrl else None,
+                "insta_link": club.insta_link,
+                "tiktok_link": club.tiktok_link,
+                "is_favourite": club.is_favourite,
+                "click_count": club.click_count,
+            })
+
+        return Response(data, status=status.HTTP_200_OK)
 
 
 
@@ -1115,7 +1168,7 @@ def get_all_clubs(request):
         data.append({
             "id": club.id,
             "owner": club.owner.full_name if club.owner else None,
-            "clubName": club.clubName,
+            "clubName": club.venue_name,
             "club_type": [ct.name for ct in club.club_type.all()],
             "vibes_type": [v.name for v in club.vibes_type.all()],
             "clubImageUrl": club.clubImageUrl.url if club.clubImageUrl else None,
@@ -1442,34 +1495,136 @@ class FollowToggleView(APIView):
             return Response({'message': message, 'action': 'followed'}, status=status.HTTP_200_OK)
 
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.contrib.auth import get_user_model
+from rest_framework.permissions import AllowAny
+from .serializers import UserFollowSerializer
+
+User = get_user_model()
+
+
 class FollowingPageView(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request, *args, **kwargs):
-        current_user = request.user
-        following_users = current_user.following.all()
-        my_follower_ids = current_user.followers.values_list('id', flat=True)
-        my_following_ids = current_user.following.values_list('id', flat=True)
+    permission_classes = [AllowAny]  
 
-        follow_back_users = User.objects.filter(id__in=my_follower_ids).exclude(id__in=my_following_ids)
+    def post(self, request, *args, **kwargs):
+        email = request.data.get("email")
+        if not email:
+            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-     
-        exclude_ids = list(my_following_ids) + list(follow_back_users.values_list('id', flat=True)) + [current_user.id]
+        try:
+            user = User.objects.get(email=email)
+            print(f"[DEBUG] User found: {user.email} (id={user.id})")
+        except User.DoesNotExist:
+            print(f"[ERROR] User not found: {email}")
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Step  Get following and followers
+        following_users = user.following.all()
+        follower_users = user.followers.all()
+        print(f"[DEBUG] Following count: {following_users.count()}, Follower count: {follower_users.count()}")
+
+        # Step : Compute suggestion users
+        follower_ids = follower_users.values_list("id", flat=True)
+        following_ids = following_users.values_list("id", flat=True)
+
+        # Users who follow you but you don't follow them (follow-back)
+        follow_back_users = User.objects.filter(id__in=follower_ids).exclude(id__in=following_ids)
+        exclude_ids = list(following_ids) + list(follow_back_users.values_list("id", flat=True)) + [user.id]
         other_suggestions = User.objects.exclude(id__in=exclude_ids)[:10]
 
-       
-        suggested_users = list(follow_back_users) + list(other_suggestions)
+        suggestions = list(follow_back_users) + list(other_suggestions)
+        print(f"[DEBUG] Suggestions count: {len(suggestions)}")
 
-        serializer_context = {'request': request}
-        following_serializer = UserFollowSerializer(following_users, many=True, context=serializer_context)
-        suggestions_serializer = UserFollowSerializer(suggested_users, many=True, context=serializer_context)
+        # Step 5️⃣: Serialize data
+        context = {"request": request, "current_user": user}
+        following_serializer = UserFollowSerializer(following_users, many=True, context=context)
+        follower_serializer = UserFollowSerializer(follower_users, many=True, context=context)
+        suggestion_serializer = UserFollowSerializer(suggestions, many=True, context=context)
 
+        # Step 6️⃣: Response payload
         response_data = {
-            'following': following_serializer.data,
-            'suggestions': suggestions_serializer.data,
+            "user_id": user.id,
+            "follower_list": follower_serializer.data,
+            "following_list": following_serializer.data,
+            "suggestions": suggestion_serializer.data,
         }
+
+        print(f"[INFO] Response ready — {len(follower_serializer.data)} followers, "
+              f"{len(following_serializer.data)} following, {len(suggestion_serializer.data)} suggestions.")
 
         return Response(response_data, status=status.HTTP_200_OK)
     
+
+
+
+
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+
+@api_view(['PATCH'])
+def update_follow_status(request):
+    """
+    PATCH API:
+    Body Example:
+    {
+        "user_email": "current_user@example.com",
+        "target_email": "target_user@example.com",
+        "follow_status": true
+    }
+    """
+    print("\n========== [DEBUG] update_follow_status called ==========")
+
+    user_email = request.data.get("user_email")
+    target_email = request.data.get("target_email")
+    follow_status = request.data.get("follow_status")
+
+    if not user_email or not target_email:
+        print("[ERROR] Missing user_email or target_email")
+        return Response({"error": "user_email and target_email are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(email=user_email)
+        target_user = User.objects.get(email=target_email)
+    except User.DoesNotExist:
+        print("[ERROR] One of the users not found")
+        return Response({"error": "Invalid user email(s)"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Prevent self-following
+    if user == target_user:
+        return Response({"error": "You cannot follow yourself"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Update follow/unfollow based on follow_status
+    if follow_status is True:
+        user.following.add(target_user)
+        message = f"{user.email} followed {target_user.email}"
+        print(f"[INFO] {message}")
+    elif follow_status is False:
+        user.following.remove(target_user)
+        message = f"{user.email} unfollowed {target_user.email}"
+        print(f"[INFO] {message}")
+    else:
+        print("[ERROR] Invalid follow_status (must be true or false)")
+        return Response({"error": "follow_status must be true or false"}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+        "message": message,
+        "user_id": user.id,
+        "target_id": target_user.id,
+        "follow_status": follow_status
+    }, status=status.HTTP_200_OK)
+
+
+
+
 
 
 
@@ -1532,79 +1687,149 @@ class ClubDetailView(generics.RetrieveAPIView):
 # Final Recommedation api 
 #************************************************************************************************
 
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from owner.models import ClubProfile, UserProfile
-from owner.serializers import ClubProfileSerializer
 from math import radians, sin, cos, sqrt, atan2
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from django.contrib.auth import get_user_model
+from .models import UserProfile, ClubProfile
+
+User = get_user_model()
 
 
 def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371  
+    """Calculate distance (km) between two lat/lon points."""
+    R = 6371  # Earth radius in km
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    a = sin(dlat/2)**2 + cos(lat1)*cos(lat2)*sin(dlon/2)**2
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
+
+@api_view(['POST'])
 def recommend_clubs(request):
-    user = request.user
+    print("\n========== [DEBUG] Recommend Clubs API Called ==========")
+
+    # Step 1: Get email from request
+    email = request.data.get("email")
+    if not email:
+        print("[ERROR] Missing 'email' in request body")
+        return Response({"error": "Email is required"}, status=400)
+
+    print(f"[DEBUG] Searching recommendations for user email: {email}")
+
+    # Step 2: Get user and profile
     try:
+        user = User.objects.get(email=email)
         profile = UserProfile.objects.get(user=user)
+        print(f"[DEBUG] Found user & profile for {email}")
+    except User.DoesNotExist:
+        print(f"[ERROR] User not found for email: {email}")
+        return Response({"error": "User not found"}, status=404)
     except UserProfile.DoesNotExist:
+        print(f"[ERROR] UserProfile not found for user: {email}")
         return Response({"error": "User profile not found"}, status=404)
 
+    # Step 3: Get user location
     try:
         user_lat = float(profile.latitude)
         user_lon = float(profile.longitude)
+        print(f"[DEBUG] User location: lat={user_lat}, lon={user_lon}")
     except (TypeError, ValueError):
+        print(f"[ERROR] Invalid or missing user location for {email}")
         return Response({"error": "User location missing"}, status=400)
 
- 
-    user_music = set([str(x) for x in profile.music_preferences.all()])
-    user_vibes = set([str(x) for x in profile.ideal_vibes.all()])
-    user_crowd = set([str(x) for x in profile.crowd_atmosphere.all()])
+    # Step 4: Get user preferences
+    try:
+        user_music = set(str(x) for x in profile.music_preferences.all())
+        user_vibes = set(str(x) for x in profile.ideal_vibes.all())
+        user_crowd = set(str(x) for x in profile.crowd_atmosphere.all())
+        print("[DEBUG] User preferences:")
+        print(f"        Music: {user_music}")
+        print(f"        Vibes: {user_vibes}")
+        print(f"        Crowd: {user_crowd}")
+    except Exception as e:
+        print(f"[ERROR] Problem fetching user preferences: {e}")
+        return Response({"error": "Failed to read user preferences"}, status=500)
 
+    # Step 5: Fetch all clubs
     clubs = ClubProfile.objects.select_related('owner').all()
+    print(f"[DEBUG] Total clubs fetched: {clubs.count()}")
+
     recommendations = []
 
+    # Step 6: Loop through each club
     for club in clubs:
-        owner = club.owner
-        if not owner or owner.latitude is None or owner.longitude is None:
-            continue
+        try:
+            owner = club.owner
+            if not owner or owner.latitude is None or owner.longitude is None:
+                print(f"[WARN] Skipping club {club.id} (missing owner or coordinates)")
+                continue
 
-        distance = calculate_distance(user_lat, user_lon, float(owner.latitude), float(owner.longitude))
-        if distance > 30:
-            continue  
+            club_lat = float(owner.latitude)
+            club_lon = float(owner.longitude)
 
-     
-        club_music = set(club.features.get('music_preferences', []))
-        club_vibes = set(club.events.get('ideal_vibes', []))
-        club_crowd = set(club.crowd_atmosphere.get('crowd&atmosphere', []))
+            distance = calculate_distance(user_lat, user_lon, club_lat, club_lon)
+            print(f"[DEBUG] Club {club.id} distance = {distance:.2f} km")
 
+            if distance > 30:
+                print(f"[DEBUG] Skipping club {club.id} (too far: {distance:.2f} km)")
+                continue
 
-        music_match = len(user_music.intersection(club_music))
-        vibes_match = len(user_vibes.intersection(club_vibes))
-        crowd_match = len(user_crowd.intersection(club_crowd))
+            # Step 7: Extract club features safely
+            features = getattr(club, 'features', {}) or {}
+            events = getattr(club, 'events', {}) or {}
+            crowd = getattr(club, 'crowd_atmosphere', {}) or {}
 
-        total_match = music_match + vibes_match + crowd_match
+            club_music = set(features.get('music_preferences', []))
+            club_vibes = set(events.get('ideal_vibes', []))
+            club_crowd = set(crowd.get('crowd&atmosphere', []))
 
-        if total_match > 0:
-            recommendations.append({
-                "id": club.id,
-         
-            })
+            music_match = len(user_music.intersection(club_music))
+            vibes_match = len(user_vibes.intersection(club_vibes))
+            crowd_match = len(user_crowd.intersection(club_crowd))
+            total_match = music_match + vibes_match + crowd_match
 
-    sorted_recommendations = sorted(recommendations, key=lambda x: (-x['total_match'], x['distance_km']))
+            print(f"[DEBUG] Club {club.id} match → "
+                  f"music={music_match}, vibes={vibes_match}, crowd={crowd_match}, total={total_match}")
 
+            if total_match > 0:
+                recommendations.append({
+                    "id": club.id,
+                    "name": getattr(club, 'venue_name', 'Unknown'),
+                    "distance_km": round(distance, 2),
+                    "total_match": total_match,
+                    "music_match": music_match,
+                    "vibes_match": vibes_match,
+                    "crowd_match": crowd_match,
+                })
+
+        except Exception as e:
+            print(f"[ERROR] Club {club.id} processing failed: {e}")
+
+    # Step 8: Sort by best match & shortest distance
+    sorted_recommendations = sorted(
+        recommendations, key=lambda x: (-x['total_match'], x['distance_km'])
+    )
+
+    print(f"[INFO] Total recommended clubs for {email}: {len(sorted_recommendations)}")
+    for r in sorted_recommendations[:5]:
+        print(f"    → Club {r['id']} ({r['name']}) | "
+              f"match={r['total_match']} | distance={r['distance_km']} km")
+
+    # Step 9: Return final response
     return Response({
+        "email": email,
         "count": len(sorted_recommendations),
-        "results": sorted_recommendations[:5]  
+        "results": sorted_recommendations[:5]
     })
+
+
+
+
+
+
 
 # Best club id suggestion 
 
@@ -1689,20 +1914,37 @@ def club_click(request, club_id):
     club = get_object_or_404(ClubProfile, id=club_id)
     club.click_count += 1
     club.save()
-    return Response({"message": f"{club.clubName} clicked", "total_clicks": club.click_count}, status=status.HTTP_200_OK)
+    return Response({"message": f"{club.email} clicked", "total_clicks": club.click_count}, status=status.HTTP_200_OK)
 
-
+from .models import ClubProfile
+from .serializers import ClubProfileSerializered
 
 
 @api_view(['GET'])
-def get_trendy_club(request, owner_id):
-    owner = get_object_or_404(ClubOwner, id=owner_id)
-    trendy_club_ids = ClubProfile.objects.filter(owner=owner).order_by('-click_count').values_list('id', flat=True)
+@permission_classes([AllowAny])
+def get_trendy_club(request):
+    print("\n========== [DEBUG] get_trendy_club Called ==========")
 
-    if not trendy_club_ids.exists():
-        return Response({"message": "No clubs found for this owner"}, status=status.HTTP_404_NOT_FOUND)
+    # Step 1️⃣: Get all clubs sorted by click count
+    clubs = ClubProfile.objects.all().order_by('-click_count')
 
-    return Response({"club_ids": list(trendy_club_ids)}, status=status.HTTP_200_OK)
+    if not clubs.exists():
+        print("[INFO] No clubs found in database.")
+        return Response({"message": "No clubs available."}, status=status.HTTP_404_NOT_FOUND)
+
+    print(f"[DEBUG] Found {clubs.count()} clubs sorted by click count.")
+
+    # Step 2️⃣: Serialize data
+    serializer = ClubProfileSerializered(clubs, many=True, context={'request': request})
+
+    # Step 3️⃣: Return sorted trendy list
+    response_data = {
+        "count": len(serializer.data),
+        "results": serializer.data,
+    }
+
+    print(f"[INFO] Returning {len(serializer.data)} trendy clubs.")
+    return Response(response_data, status=status.HTTP_200_OK)
 
 
 
@@ -1818,7 +2060,7 @@ def nearby_clubs(request):
                 float(club.latitude),
                 float(club.longitude)
             )
-            debug_logs.append(f"Club: {club.clubName}, location: ({club.latitude}, {club.longitude}), distance={distance:.2f} km")
+            debug_logs.append(f"Club: {club.email}, location: ({club.latitude}, {club.longitude}), distance={distance:.2f} km")
             if distance <= 5: 
                 nearby.append({
                     "id": club.id,
@@ -2018,3 +2260,215 @@ def update_user_profile(request):
         "about": profile.about,
         "music_preferences": list(profile.music_preferences.values_list('name', flat=True))
     }, status=status.HTTP_200_OK)
+
+
+
+
+
+# For plan to night views.py 
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from django.db.models import Q
+import random
+
+from .models import ClubProfile, Vibes_Choice
+
+
+class ClubSelectionView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """
+        GET:
+        Return vibe and who-with options (and optional club list preview)
+        """
+
+        vibe_options = list(Vibes_Choice.objects.values_list('name', flat=True)) or [
+            "Chill", "Party", "Romantic", "Luxury", "Live Music"
+        ]
+
+        who_with_options = ["Friends", "Partner", "Family", "Alone"]
+
+        # Optional: preview 3 random clubs
+        clubs = ClubProfile.objects.all()
+        random_clubs = random.sample(list(clubs[:10]), min(3, clubs.count())) if clubs.exists() else []
+
+        data = {
+            "clubs_preview": [
+                {"id": club.id, "name": club.venue_name, "city": club.venue_city}
+                for club in random_clubs
+            ],
+            "vibes": vibe_options,
+            "who_are_you_with": who_with_options,
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """
+        POST:
+        Find matching clubs by selected vibe.
+        Example body:
+        {
+            "email": "user@example.com",
+            "selected_vibe": "Party",
+            "who_are_you_with": "Friends"
+        }
+        """
+        email = request.data.get("email")
+        selected_vibe = request.data.get("selected_vibe")
+        who_with = request.data.get("who_are_you_with")
+
+        if not email:
+            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not selected_vibe:
+            return Response({"error": "Vibe selection is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not who_with:
+            return Response({"error": "Please select who you are with"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            vibe_obj = Vibes_Choice.objects.get(name__iexact=selected_vibe)
+        except Vibes_Choice.DoesNotExist:
+            return Response({"error": f"Vibe '{selected_vibe}' not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        matching_clubs = ClubProfile.objects.filter(vibes_type=vibe_obj)
+
+        if not matching_clubs.exists():
+            return Response({
+                "message": f"No clubs found for vibe '{selected_vibe}'",
+                "vibe": selected_vibe,
+                "with": who_with
+            }, status=status.HTTP_200_OK)
+
+        # ✅ Randomly pick up to 3 clubs
+        clubs = random.sample(list(matching_clubs), min(3, matching_clubs.count()))
+
+        data = {
+            "message": "Matching clubs found!",
+            "selected_vibe": selected_vibe,
+            "who_are_you_with": who_with,
+            "clubs": [
+                {
+                    "id": club.id,
+                    "name": club.venue_name,
+                    "city": club.venue_city,
+                    "club_type": [ct.name for ct in club.club_type.all()],
+                    "vibes": [v.name for v in club.vibes_type.all()],
+                    "coverCharge": club.coverCharge,
+                    "image": club.clubImageUrl.url if club.clubImageUrl else None,
+                }
+                for club in clubs
+            ],
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
+
+
+
+
+# for owner details api 
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from .models import ClubOwner, ClubProfile
+
+
+class OwnerClubDetailsView(APIView):
+    """
+    POST:
+    Get Club details by Owner Email.
+
+    Example Request:
+    {
+        "email": "owner@example.com"
+    }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+
+        if not email:
+            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        try:
+            owner = ClubOwner.objects.get(email=email)
+        except ClubOwner.DoesNotExist:
+            return Response({"error": "Owner not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    
+        try:
+            club = owner.club_profile  
+        except ClubProfile.DoesNotExist:
+            return Response({"error": "Club profile not found for this owner"}, status=status.HTTP_404_NOT_FOUND)
+
+
+        data = {
+            "owner_email": owner.email,
+            "owner_full_name":owner.full_name,
+            "owner_profile_image": owner.profile_image.url if owner.profile_image else None,
+            "club_name": club.venue_name,
+            "venue_city": club.venue_city,
+            "about": club.about,
+            "coverCharge": club.coverCharge,
+            "ageRequirement": club.ageRequirement,
+            "latitude": club.latitude,
+            "longitude": club.longitude,
+            "club_type": [ct.name for ct in club.club_type.all()],
+            "vibes": [v.name for v in club.vibes_type.all()],
+            "features": club.features,
+            "events": club.events,
+            "crowd_atmosphere": club.crowd_atmosphere,
+            "image": club.clubImageUrl.url if club.clubImageUrl else None,
+            "insta_link": club.insta_link,
+            "tiktok_link": club.tiktok_link,
+            "phone": club.phone,
+            "click_count": club.click_count,
+            "is_favourite": club.is_favourite,
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
+
+
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from .models import UserProfile
+from .serializers import UserProfileSerializer
+
+@api_view(['GET'])
+@permission_classes([AllowAny])  # Public API
+def get_all_user_profiles(request):
+    print("\n========== [DEBUG] Get All User Profiles Called ==========")
+    try:
+        profiles = UserProfile.objects.select_related('user').prefetch_related(
+            'music_preferences', 'ideal_vibes', 'crowd_atmosphere'
+        )
+        print(f"[DEBUG] Total profiles fetched: {profiles.count()}")
+
+        serializer = UserProfileSerializer(profiles, many=True, context={'request': request})
+        print(f"[DEBUG] Serialization successful. Returning {len(serializer.data)} profiles.")
+
+        return Response({
+            "count": len(serializer.data),
+            "results": serializer.data
+        })
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch user profiles: {e}")
+        return Response({"error": "Something went wrong while fetching profiles"}, status=500)

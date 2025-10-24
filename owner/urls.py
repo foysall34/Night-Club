@@ -89,16 +89,17 @@ urlpatterns = [
     path('user/change-password/', UserChangePasswordAPIView.as_view(), name='user-change-password'),
     path('user/forgot-password/', UserForgotPasswordAPIView.as_view(), name='user-forgot-password'),
     path('user/reset-password/', UserResetPasswordAPIView.as_view(), name='user-reset-password'),
-    path('owners/<int:owner_id>/clubs/', views.get_owners_clubs, name='owner-clubs-list'),   #See all club fillter by owner id 
     path('user/places/', views.get_place_details, name='place-details'),
     path('clubs/<int:club_id>/reviews/', manage_club_reviews, name='manage-club-reviews'), #review
     path('manage_user_profile_preferences/', manage_user_profile_preferences, name='manage-ideal-vibes'),
     path('following/', FollowingPageView.as_view(), name='following-page'),
+    path('follow/update/', update_follow_status, name='update_follow_status'),#  Follow patch requ
+
     path('users/<int:user_id>/toggle-follow/', FollowToggleView.as_view(), name='toggle-follow'),
     path('profile/', UserProfileView.as_view(), name='user-profile'), 
     path('clubs/recommend/', recommend_clubs, name='recommend-clubs'), # User preference details api
-    path('trendy-club/<int:owner_id>/' , get_trendy_club , name= 'trendy') ,
-    path('clubs/<int:club_id>/click/', views.club_click, name='club_click'),
+    path('trendy-club/' , get_trendy_club , name= 'trendy') ,
+    path('clubs/<int:club_id>/click/', views.club_click, name='club_click'),  # relation with trending
     path('all-events/', get_all_events, name='get_all_events'),
     path('events/upcoming/', get_upcoming_events, name='upcoming-events'),
     path('all-clubs/', get_all_clubs, name='get-all-clubs'),
@@ -107,7 +108,15 @@ urlpatterns = [
     path('clubs/open-today/', nearby_currently_open_clubs, name='clubs-open-today'),
     path('is_favourite/', favourite_clubs, name='clubs-en-today'),
     path('edit-user-profile/' , update_user_profile , name='edit-user-profile'),
-    path('top-club-recommendation/' , top_recommended_club , name='top-club')
+    path('top-club-recommendation/' , top_recommended_club , name='top-club'),
+    path("plan-tonight/selection/", ClubSelectionView.as_view(), name="club_selection"),  # plan night today
+    path('owner/club-details/', OwnerClubDetailsView.as_view(), name='owner_club_details'),
+    path('all-clubs/', AllClubListView.as_view(), name='all_clubs'),
+    path('users-all/', get_all_user_profiles, name='get_all_user_profiles'),  #all user details
+
+
+ 
+
 
 
 

@@ -104,7 +104,6 @@ class CreateCheckoutSessionView(APIView):
 
         return Response({
             "checkout_url": session.url,
-            "session_id": session.id,
             "email": owner.email,
             "plan": plan.name,
             "success_url": success_url,
@@ -148,7 +147,6 @@ class PaymentSuccessView(APIView):
         return render(request, "payments/success.html", context)
 
 
-# ❌ Payment cancel page
 class PaymentCancelView(APIView):
     permission_classes = [AllowAny]
 
@@ -161,14 +159,32 @@ class PaymentCancelView(APIView):
 
 
 class MySubscriptionView(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request):
-        owner = request.clubowner.club_profile
+    permission_classes = [AllowAny]  
+
+    def post(self, request):
+        email = request.data.get("email")
+        if not email:
+            return Response(
+                {"error": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            owner = ClubOwner.objects.get(email=email)
+        except ClubOwner.DoesNotExist:
+            return Response(
+                {"error": "Owner not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
         sub = Subscription.objects.filter(owner=owner, status='active').first()
+
         if not sub:
-            return Response({"subscription": None})
+            return Response(
+                {"subscription": None, "email": email},
+                status=status.HTTP_200_OK
+            )
+
         data = SubscriptionSerializer(sub).data
-        return Response(data)
+        return Response(data, status=status.HTTP_200_OK)
 
 
 

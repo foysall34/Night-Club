@@ -202,7 +202,7 @@ TEMP_MEDIA_ROOT = os.path.join(BASE_DIR, 'temp_media')
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-import os
+
 MEDIA_URL = '/media/'
 STATIC_URL = 'static/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

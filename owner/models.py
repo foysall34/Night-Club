@@ -232,7 +232,13 @@ class CrowdAtmosphere(models.Model):
 
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE )
+    user_img = models.ImageField(
+        upload_to='profile/images/user/', 
+        default='profile/images/default_user.jpg',  
+        blank=True, 
+        null=True
+    )
     city = models.CharField(max_length=200 , default='write city')
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -240,6 +246,10 @@ class UserProfile(models.Model):
     music_preferences = models.ManyToManyField(MusicGenre,blank=True,related_name='user_profiles',help_text="The user's preferred music genres.")
     ideal_vibes = models.ManyToManyField(Vibe,blank=True,related_name='user_profiles_vibes',help_text="The user's preferred ideal vibes.")
     crowd_atmosphere = models.ManyToManyField(CrowdAtmosphere,blank=True,related_name='user_profiles_crowds', help_text="The user's preferred crowd atmosphere.")
+    is_online = models.BooleanField(default=False)
+    achievement = models.TextField(null=True, blank=True)
+    followers = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True , blank= True , null= True)
 
 
     def __str__(self):

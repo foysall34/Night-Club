@@ -1169,6 +1169,9 @@ def get_all_clubs(request):
             "id": club.id,
             "owner": club.owner.full_name if club.owner else None,
             "clubName": club.venue_name,
+            "club_city" : club.venue_city , 
+            "about" : club.about,
+            "weekly_hours" : club.weekly_hours,
             "club_type": [ct.name for ct in club.club_type.all()],
             "vibes_type": [v.name for v in club.vibes_type.all()],
             "clubImageUrl": club.clubImageUrl.url if club.clubImageUrl else None,
@@ -1176,6 +1179,10 @@ def get_all_clubs(request):
             "events": club.events,
             "crowd_atmosphere": club.crowd_atmosphere,
             "is_favourite": club.is_favourite,
+            "is_hidden" : club.is_hidden , 
+            "club_review" : club.reviews,
+            "insta_link" : club.insta_link,
+            "tiktok_link" : club.tiktok_link,
 
             "average_rating": avg_rating,
             "total_reviews": len(reviews_data),
@@ -1223,7 +1230,7 @@ def get_clubs_by_type_post(request):
     for club in clubs:
         if club.latitude is not None and club.longitude is not None:
             distance = calculate_distance(user_lat, user_lon, float(club.latitude), float(club.longitude))
-            debug_logs.append(f"Club: {club.clubName}, location: ({club.latitude}, {club.longitude}), distance={distance:.2f} km")
+            debug_logs.append(f"Club: {club.venue_name}, location: ({club.latitude}, {club.longitude}), distance={distance:.2f} km")
             data.append({
                 "id": club.id,
                 "distance_km": round(distance, 2)
@@ -1246,9 +1253,11 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from .models import ClubProfile
 from datetime import datetime
 from django.core.files.storage import FileSystemStorage 
-@api_view(['GET', 'POST'])
+
+
+@api_view(['GET', 'POST', 'PATCH'])
 @permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser]) 
+@parser_classes([MultiPartParser, FormParser])
 def manage_club_reviews(request, club_id):
     try:
         club = ClubProfile.objects.get(id=club_id)
@@ -1259,9 +1268,8 @@ def manage_club_reviews(request, club_id):
     if request.method == 'GET':
         reviews_data = club.reviews if isinstance(club.reviews, list) else []
         
-
         if reviews_data:
-            total_rating = sum(float(r['rating']) for r in reviews_data if 'rating' in r)
+            total_rating = sum(float(r.get('rating', 0)) for r in reviews_data)
             avg_rating = round(total_rating / len(reviews_data), 1)
         else:
             avg_rating = 0.0
@@ -1310,6 +1318,52 @@ def manage_club_reviews(request, club_id):
             "total_reviews": len(club.reviews)
         }, status=status.HTTP_201_CREATED)
 
+    # ================= PATCH REQUEST =================
+    elif request.method == 'PATCH':
+        review_index = request.data.get('review_index')  # which review to edit
+        rating = request.data.get('rating')
+        comment = request.data.get('comment')
+        image = request.FILES.get('image', None)
+
+        if review_index is None:
+            return Response({"error": "review_index is required to update a review"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            review_index = int(review_index)
+        except ValueError:
+            return Response({"error": "review_index must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Make sure club has reviews and that index exists
+        if not isinstance(club.reviews, list) or review_index < 0 or review_index >= len(club.reviews):
+            return Response({"error": "Invalid review index"}, status=status.HTTP_400_BAD_REQUEST)
+
+        review = club.reviews[review_index]
+
+        # Update fields if provided
+        if rating:
+            review['rating'] = float(rating)
+        if comment:
+            review['comment'] = comment
+        if image:
+            fs = FileSystemStorage()
+            filename = fs.save(image.name, image)
+            review['image_url'] = fs.url(filename)
+
+        review['timestamp'] = datetime.now().isoformat()
+
+        # Save updated review back to the list
+        club.reviews[review_index] = review
+        club.save()
+
+        total_rating = sum(float(r.get('rating', 0)) for r in club.reviews)
+        avg_rating = round(total_rating / len(club.reviews), 1)
+
+        return Response({
+            "success_msg": "Review updated successfully",
+            "updated_review": review,
+            "average_rating": avg_rating,
+            "total_reviews": len(club.reviews)
+        }, status=status.HTTP_200_OK)
 
 
 
@@ -2122,7 +2176,7 @@ def nearby_currently_open_clubs(request):
             float(club.latitude),
             float(club.longitude)
         )
-        debug_logs.append(f"Club: {club.clubName}, distance={distance:.2f} km")
+        debug_logs.append(f"Club: {club.venue_name}, distance={distance:.2f} km")
 
         if distance > 5:
             continue 
@@ -2130,7 +2184,7 @@ def nearby_currently_open_clubs(request):
         weekly_hours = club.weekly_hours or {}
         today_hours = weekly_hours.get(today)
         if not today_hours:
-            debug_logs.append(f"Club {club.clubName} has no hours for today")
+            debug_logs.append(f"Club {club.venue_name} has no hours for today")
             continue
 
         start_str = today_hours.get('start_time')
@@ -2192,7 +2246,7 @@ def favourite_clubs(request):
         club.is_favourite = bool(is_fav)
         club.save()
 
-        return Response({"message": f"Club '{club.clubName}' favourite status updated to {club.is_favourite}"}, status=status.HTTP_200_OK)
+        return Response({"message": f"Club '{club.venue_name}' favourite status updated to {club.is_favourite}"}, status=status.HTTP_200_OK)
 
     elif request.method == 'GET':
         favourite_clubs = ClubProfile.objects.filter(is_favourite=True)

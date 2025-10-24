@@ -335,6 +335,7 @@ class ClubProfile(models.Model):
     reviews = models.JSONField(default=list) 
     click_count = models.PositiveIntegerField(default=0)
     is_favourite = models.BooleanField(default=False)
+    is_hidden = models.BooleanField(default=False)
     insta_link = models.CharField(max_length=2000 , default='insta link')
     tiktok_link = models.CharField(max_length=2000 , default='tiktok link')
     phone =models.IntegerField(null= True , blank= True)

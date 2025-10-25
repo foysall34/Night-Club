@@ -68,8 +68,8 @@ class CreateCheckoutSessionView(APIView):
 
         customer_id = create_or_get_stripe_customer(owner)
 
-        success_url = "https://creative-largest-virtue-representation.trycloudflare.com/stripe/payment/success?session_id={CHECKOUT_SESSION_ID}"
-        cancel_url = "https://creative-largest-virtue-representation.trycloudflare.com/stripe/payment/cancel"
+        success_url = "https://batteries-reflection-enquiry-positioning.trycloudflare.com/stripe/payment/success?session_id={CHECKOUT_SESSION_ID}"
+        cancel_url = "https://batteries-reflection-enquiry-positioning.trycloudflare.com/stripe/payment/cancel"
 
         session_args = {
             "payment_method_types": ["card"],
@@ -78,6 +78,9 @@ class CreateCheckoutSessionView(APIView):
             "line_items": [{"price": price_id, "quantity": 1}],
             "success_url": success_url,
             "cancel_url": cancel_url,
+            "metadata": {
+            "plan_name": plan.name,
+    }
         }
 
         if coupon_code:
@@ -111,6 +114,9 @@ class CreateCheckoutSessionView(APIView):
         })
 
 
+
+
+
 from django.shortcuts import render
 from django.http import HttpResponseBadRequest
 from django.views import View
@@ -135,13 +141,15 @@ class PaymentSuccessView(APIView):
             return render(request, "payments/success.html", {
                 "error": f"Could not retrieve payment info: {str(e)}"
             })
-
+        
+        plan_name = session.metadata.get("plan_name", "Unknown Plan")
         context = {
             "session_id": session.id,
             "customer_email": customer.email,
             "amount_total": (session.amount_total or 0) / 100,
             "currency": (session.currency or "").upper(),
             "payment_status": session.payment_status,
+            "plan_name": plan_name, 
         }
 
         return render(request, "payments/success.html", context)
@@ -185,6 +193,9 @@ class MySubscriptionView(APIView):
 
         data = SubscriptionSerializer(sub).data
         return Response(data, status=status.HTTP_200_OK)
+
+# -------------------------- Webhook ----------------------------------------
+
 
 
 

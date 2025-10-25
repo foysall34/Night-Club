@@ -107,6 +107,7 @@ urlpatterns = [
     path('clubs-nearby/', nearby_clubs, name='nearby-clubs'),
     path('clubs/open-today/', nearby_currently_open_clubs, name='clubs-open-today'),
     path('is_favourite/', favourite_clubs, name='clubs-en-today'),
+    path('is_hidden/', hidden_clubs, name='hidden-en-today'),
     path('edit-user-profile/' , update_user_profile , name='edit-user-profile'),
     path('top-club-recommendation/' , top_recommended_club , name='top-club'),
     path("plan-tonight/selection/", ClubSelectionView.as_view(), name="club_selection"),  # plan night today

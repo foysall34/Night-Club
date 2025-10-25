@@ -2266,6 +2266,47 @@ def favourite_clubs(request):
     
 
 
+# Is Hidden
+@api_view(['GET', 'PATCH'])
+def hidden_clubs(request):
+   
+    if request.method == 'PATCH':
+        club_id = request.data.get('club_id')
+        is_fav = request.data.get('is_hidden')
+
+        if club_id is None or is_fav is None:
+            return Response({"error": "club_id and is_hidden are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            club = ClubProfile.objects.get(id=club_id)
+        except ClubProfile.DoesNotExist:
+            return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if isinstance(is_fav, str):
+            is_fav = is_fav.lower() in ['true', '1', 'yes']
+
+        club.is_favourite = bool(is_fav)
+        club.save()
+
+        return Response({"message": f"Club '{club.venue_name}' hidden status updated to {club.is_favourite}"}, status=status.HTTP_200_OK)
+
+    elif request.method == 'GET':
+        favourite_clubs = ClubProfile.objects.filter(is_favourite=True)
+        data = []
+        for club in favourite_clubs:
+            data.append({
+                "id": club.id,
+                "clubName": club.clubName,
+                "club_location": club.club_location,
+                "latitude": club.latitude,
+                "longitude": club.longitude,
+                "is_favourite": club.is_hidden,
+                "phone": club.phone,
+                "email": club.email,
+            })
+        return Response({"favourite_clubs": data}, status=status.HTTP_200_OK)
+
+
 # Edit user profile 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])

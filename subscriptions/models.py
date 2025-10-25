@@ -12,11 +12,11 @@ class Plan(models.Model):
     name = models.CharField(max_length=100)
     features = models.TextField(blank=True)
 
-    # Stripe price mapping
+
     stripe_monthly_price_id = models.CharField(max_length=255, blank=True, null=True)
     stripe_yearly_price_id = models.CharField(max_length=255, blank=True, null=True)
 
-    # Price (for reference only, actual charge from Stripe)
+  
     monthly_price_usd = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     yearly_price_usd = models.DecimalField(max_digits=7, decimal_places=2, default=0.00)
 
@@ -104,3 +104,23 @@ class Coupon(models.Model):
 
     def __str__(self):
         return f"{self.code} ({self.percent_off}% off for {self.duration_in_months} months)"
+
+
+
+class PaymentHistory(models.Model):
+    subscription = models.ForeignKey(
+        Subscription, on_delete=models.CASCADE, related_name="payments"
+    )
+    invoice_id = models.CharField(max_length=255, null=True, blank=True)
+    amount_paid = models.FloatField(default=0.0)
+    currency = models.CharField(max_length=10, default="USD")
+    status = models.CharField(max_length=50, default="succeeded")
+    paid_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = "Payment History"
+        verbose_name_plural = "Payment Histories"
+        ordering = ["-paid_at"]
+
+    def __str__(self):
+        return f"{self.subscription.owner.full_name} - {self.amount_paid} {self.currency}"

@@ -197,7 +197,7 @@ class MySubscriptionView(APIView):
 # -------------------------- Webhook ----------------------------------------
 
 
-
+from django.utils import timezone
 
 @method_decorator(csrf_exempt, name='dispatch')
 class StripeWebhookView(APIView):
@@ -207,62 +207,101 @@ class StripeWebhookView(APIView):
     def post(self, request):
         payload = request.body
         sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+
         try:
-            event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
-        except ValueError:
-            return Response(status=400)
-        except stripe.error.SignatureVerificationError:
+            event = stripe.Webhook.construct_event(
+                payload,
+                sig_header,
+                settings.STRIPE_WEBHOOK_SECRET
+            )
+        except Exception as e:
+            print(" Signature verification failed:", e)
             return Response(status=400)
 
-    
         event_type = event['type']
         data_obj = event['data']['object']
 
+        print(f"EVENT RECEIVED: {event_type}")
+
         try:
+            # Checkout success — subscription live now
             if event_type == 'checkout.session.completed':
-                if data_obj.get('mode') == 'subscription':
-                    stripe_sub_id = data_obj.get('subscription')
-                    if stripe_sub_id:
-                        stripe_sub = stripe.Subscription.retrieve(stripe_sub_id, expand=['items.data.price'])
-                        attach_subscription_locally(stripe_sub)
+                customer_email = data_obj.get("customer_details", {}).get("email")
+                stripe_sub_id = data_obj.get('subscription')
+                customer_id = data_obj.get("customer")
 
-            elif event_type in ('customer.subscription.updated', 'customer.subscription.created'):
-                stripe_sub = stripe.Subscription.retrieve(data_obj.get('id'), expand=['items.data.price'])
-                attach_subscription_locally(stripe_sub)
+                print("Customer Email from Stripe:", customer_email)
 
-            elif event_type == 'customer.subscription.deleted':
-   
-                stripe_sub_id = data_obj.get('id')
-                try:
-                    sub = Subscription.objects.get(stripe_subscription_id=stripe_sub_id)
-                    sub.status = 'canceled'
-                    sub.current_period_end = None
-                    sub.save()
-                except Subscription.DoesNotExist:
-                    pass
+                owner = ClubOwner.objects.filter(email=customer_email).first()
 
-            elif event_type == 'invoice.payment_succeeded':
-          
-                invoice = data_obj
-                stripe_sub_id = invoice.get('subscription')
+                if not owner:
+                    print("⚠ Owner not found with email:", customer_email)
+                    return Response(status=200)
+
                 if stripe_sub_id:
-                    try:
-                        sub = Subscription.objects.get(stripe_subscription_id=stripe_sub_id)
-                        # create PaymentHistory
-                        from .models import PaymentHistory
-                        amt = (invoice.get('amount_paid') or 0) / 100.0
-                        PaymentHistory.objects.create(
-                            subscription=sub,
-                            invoice_id=invoice.get('id'),
-                            amount_paid=amt,
-                            status='succeeded'
-                        )
-                    except Subscription.DoesNotExist:
-                        pass
+                    stripe_sub = stripe.Subscription.retrieve(
+                        stripe_sub_id,
+                        expand=['items.data.price']
+                    )
+                    self.sync_subscription(owner, stripe_sub)
 
-            # add other event handlers if you need
-        except Exception:
-            # avoid throwing 500 to Stripe — log exception in real project
-            pass
+            # Subscription renewal or plan change
+            elif event_type in ('customer.subscription.updated', 'customer.subscription.created'):
+                stripe_sub = stripe.Subscription.retrieve(
+                    data_obj.get('id'),
+                    expand=['items.data.price']
+                )
+                customer_id = stripe_sub.get("customer")
+                owner = ClubOwner.objects.filter(stripe_customer_id=customer_id).first()
+                self.sync_subscription(owner, stripe_sub)
+
+        except Exception as e:
+            print(" Error handling webhook:", e)
 
         return Response(status=200)
+
+    def sync_subscription(self, owner, stripe_sub):
+        """ Owner Email Based DB Create + Update"""
+        if not owner:
+            print("⚠ Owner missing for subscription sync!")
+            return
+
+        stripe_sub_id = stripe_sub.get("id")
+        price = stripe_sub["items"]["data"][0]["price"]["id"]
+
+        #  plan find matched with monthly / yearly price id
+        plan = Plan.objects.filter(
+            stripe_monthly_price_id=price
+        ).first() or Plan.objects.filter(
+            stripe_yearly_price_id=price
+        ).first()
+
+        sub, created = Subscription.objects.get_or_create(
+            stripe_subscription_id=stripe_sub_id,
+            defaults={
+                "owner": owner,
+                "plan": plan,
+                "stripe_customer_id": stripe_sub.get("customer"),
+                "status": stripe_sub.get("status", "inactive"),
+            },
+        )
+
+        print(f"Subscription Created: {created}")
+
+        sub.plan = plan
+        sub.status = stripe_sub.get("status")
+        sub.cancel_at_period_end = stripe_sub.get("cancel_at_period_end", False)
+
+        if stripe_sub.get("current_period_start"):
+            sub.current_period_start = timezone.datetime.fromtimestamp(
+                stripe_sub.get("current_period_start"), tz=timezone.utc
+            )
+        if stripe_sub.get("current_period_end"):
+            sub.current_period_end = timezone.datetime.fromtimestamp(
+                stripe_sub.get("current_period_end"), tz=timezone.utc
+            )
+
+        sub.save()
+
+        print(f" Subscription Synced → {owner.email}, Plan: {plan.name if plan else 'Unknown'} ")
+

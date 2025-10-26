@@ -1622,25 +1622,6 @@ def manage_user_profile_preferences(request):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #=========================================================================
 # for follow & followres 
 
@@ -1717,13 +1698,13 @@ class FollowingPageView(APIView):
         suggestions = list(follow_back_users) + list(other_suggestions)
         print(f"[DEBUG] Suggestions count: {len(suggestions)}")
 
-        # Step 5️⃣: Serialize data
+        # Step 5: Serialize data
         context = {"request": request, "current_user": user}
         following_serializer = UserFollowSerializer(following_users, many=True, context=context)
         follower_serializer = UserFollowSerializer(follower_users, many=True, context=context)
         suggestion_serializer = UserFollowSerializer(suggestions, many=True, context=context)
 
-        # Step 6️⃣: Response payload
+        # Step  Response payload
         response_data = {
             "user_id": user.id,
             "follower_list": follower_serializer.data,
@@ -1782,7 +1763,7 @@ def update_follow_status(request):
     if user == target_user:
         return Response({"error": "You cannot follow yourself"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Update follow/unfollow based on follow_status
+  
     if follow_status is True:
         user.following.add(target_user)
         message = f"{user.email} followed {target_user.email}"
@@ -1924,10 +1905,10 @@ def recommend_clubs(request):
         club_lon = float(club.longitude)
 
         distance = calculate_distance(user_lat, user_lon, club_lat, club_lon)
-        if distance > 15:  # Dhaka realistic limit
+        if distance > 15:  
             continue
 
-        # Extract club JSON-based preferences
+
         club_music = set(club.features.get("music", []))
         club_vibes = set(club.events.get("vibes", []))
         club_crowd = set(club.crowd_atmosphere.get("crowd", []))
@@ -1937,7 +1918,7 @@ def recommend_clubs(request):
         print(f"        Vibes: {club_vibes}")
         print(f"        Crowd: {club_crowd}")
 
-        # Matching
+
         music_match = len(user_music & club_music)
         vibes_match = len(user_vibes & club_vibes)
         crowd_match = len(user_crowd & club_crowd)
@@ -2016,15 +1997,15 @@ def top_recommended_club(request):
                                      float(club.latitude),
                                      float(club.longitude))
 
-        if distance > 15:  # Dhaka realistic radius
+        if distance > 15: 
             continue
 
-        #  Correct keys
+        
         club_music = set(club.features.get('music', []))
         club_vibes = set(club.events.get('vibes', []))
         club_crowd = set(club.crowd_atmosphere.get('crowd', []))
 
-        # Matching
+        
         music_match = len(user_music & club_music)
         vibes_match = len(user_vibes & club_vibes)
         crowd_match = len(user_crowd & club_crowd)
@@ -2412,23 +2393,23 @@ def update_user_profile(request):
     except UserProfile.DoesNotExist:
         return Response({"error": "User profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    # --- Update User full_name ---
+
     full_name = request.data.get('full_name')
     if full_name is not None:
         user.full_name = full_name
         user.save(update_fields=['full_name'])
 
-    # --- Update City ---
+
     city = request.data.get('city')
     if city is not None:
         profile.city = city
 
-    # --- Update About ---
+
     about = request.data.get('about')
     if about is not None:
         profile.about = about
 
-    # --- Update Music Preferences ---
+
     music_ids = request.data.get('music_preferences')
     if music_ids is not None:
         if not isinstance(music_ids, list):

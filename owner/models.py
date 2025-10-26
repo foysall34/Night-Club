@@ -249,6 +249,7 @@ class UserProfile(models.Model):
     is_online = models.BooleanField(default=False)
     achievement = models.TextField(null=True, blank=True)
     followers = models.PositiveIntegerField(default=0)
+    user_reviews = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True , blank= True , null= True)
 
 
@@ -332,7 +333,7 @@ class ClubProfile(models.Model):
     events = models.JSONField(default=dict)
     crowd_atmosphere = models.JSONField(default=dict)
     weekly_hours = models.JSONField(default=get_default_weekly_hours)
-    reviews = models.JSONField(default=list) 
+    user_reviews = models.JSONField(default=list) 
     click_count = models.PositiveIntegerField(default=0)
     is_favourite = models.BooleanField(default=False)
     is_hidden = models.BooleanField(default=False)
@@ -359,6 +360,7 @@ class Event(models.Model):
 
     club = models.ForeignKey(ClubProfile, on_delete=models.CASCADE, related_name='club_events')
     name = models.CharField(max_length=255, verbose_name="Event Name")
+    description = models.TextField(default='write des')
     date = models.DateField()
     time = models.TimeField()
     entry_fee = models.CharField(max_length=100, blank=True, help_text="e.g., $20 or Free")

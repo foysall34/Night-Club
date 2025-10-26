@@ -20,7 +20,7 @@ class Plan(models.Model):
     monthly_price_usd = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     yearly_price_usd = models.DecimalField(max_digits=7, decimal_places=2, default=0.00)
 
-    # Feature control
+
     max_live_events = models.IntegerField(null=True, blank=True)  
     admin_seats = models.IntegerField(default=1)
     boost_credits_per_month = models.IntegerField(default=0)
@@ -107,20 +107,4 @@ class Coupon(models.Model):
 
 
 
-class PaymentHistory(models.Model):
-    subscription = models.ForeignKey(
-        Subscription, on_delete=models.CASCADE, related_name="payments"
-    )
-    invoice_id = models.CharField(max_length=255, null=True, blank=True)
-    amount_paid = models.FloatField(default=0.0)
-    currency = models.CharField(max_length=10, default="USD")
-    status = models.CharField(max_length=50, default="succeeded")
-    paid_at = models.DateTimeField(default=timezone.now)
 
-    class Meta:
-        verbose_name = "Payment History"
-        verbose_name_plural = "Payment Histories"
-        ordering = ["-paid_at"]
-
-    def __str__(self):
-        return f"{self.subscription.owner.full_name} - {self.amount_paid} {self.currency}"

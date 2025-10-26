@@ -1157,7 +1157,7 @@ def get_all_clubs(request):
 
     for club in clubs:
 
-        reviews_data = club.reviews if isinstance(club.reviews, list) else []
+        reviews_data = club.user_reviews if isinstance(club.user_reviews, list) else []
 
         if reviews_data:
             total_rating = sum(float(r['rating']) for r in reviews_data if 'rating' in r)
@@ -1180,7 +1180,7 @@ def get_all_clubs(request):
             "crowd_atmosphere": club.crowd_atmosphere,
             "is_favourite": club.is_favourite,
             "is_hidden" : club.is_hidden , 
-            "club_review" : club.reviews,
+            "club_review" : club.user_reviews,
             "insta_link" : club.insta_link,
             "tiktok_link" : club.tiktok_link,
 
@@ -1363,6 +1363,132 @@ def manage_club_reviews(request, club_id):
             "updated_review": review,
             "average_rating": avg_rating,
             "total_reviews": len(club.reviews)
+        }, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
+
+# 2nd review views.py 
+
+
+@api_view(['GET', 'POST', 'PATCH'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def manage_club_reviewed(request, club_id):
+    try:
+        club = ClubProfile.objects.get(id=club_id)
+    except ClubProfile.DoesNotExist:
+        return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    user_profile = UserProfile.objects.get(user=request.user)  
+
+    # ================= GET REQUEST =================
+    if request.method == 'GET':
+        all_profiles = UserProfile.objects.all()
+        reviews_data = []
+
+
+        for profile in all_profiles:
+            if isinstance(profile.user_reviews, list):
+                reviews_data.extend(
+                    [r for r in profile.user_reviews if r.get('club_id') == club.id]
+                )
+
+        if reviews_data:
+            total_rating = sum(float(r.get('rating', 0)) for r in reviews_data)
+            avg_rating = round(total_rating / len(reviews_data), 1)
+        else:
+            avg_rating = 0.0
+
+        return Response({
+            "average_rating": avg_rating,
+            "total_reviews": len(reviews_data),
+            "reviews": reviews_data
+        }, status=status.HTTP_200_OK)
+
+    # ================= POST REQUEST =================
+    elif request.method == 'POST':
+        rating = request.data.get('rating')
+        comment = request.data.get('comment')
+        email = request.user.email
+        image = request.FILES.get('image')
+
+        if not rating:
+            return Response({"error": "Rating is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_url = None
+        if image:
+            fs = FileSystemStorage()
+            filename = fs.save(image.name, image)
+            image_url = fs.url(filename)
+
+        new_review = {
+            'club_id': club.id,  
+            'rating': float(rating),
+            'comment': comment,
+            'image_url': image_url,
+            'user_email': email,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        if not isinstance(user_profile.user_reviews, list):
+            user_profile.user_reviews = []
+
+        user_profile.user_reviews.append(new_review)
+        user_profile.save()
+
+        return Response({
+            "success_msg": "Review submitted successfully",
+            "new_review": new_review
+        }, status=status.HTTP_201_CREATED)
+
+    # ================= PATCH REQUEST =================
+    elif request.method == 'PATCH':
+        review_index = request.data.get('review_index')
+        rating = request.data.get('rating')
+        comment = request.data.get('comment')
+        image = request.FILES.get('image')
+
+        if review_index is None:
+            return Response({"error": "review_index is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            review_index = int(review_index)
+        except ValueError:
+            return Response({"error": "review_index must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Ensure user editing their own review only
+        if review_index < 0 or review_index >= len(user_profile.user_reviews):
+            return Response({"error": "Invalid review index"}, status=status.HTTP_400_BAD_REQUEST)
+
+        review = user_profile.user_reviews[review_index]
+
+        if review.get('club_id') != club.id:
+            return Response({"error": "You can only edit your own review for this club"}, status=status.HTTP_403_FORBIDDEN)
+
+        if rating:
+            review['rating'] = float(rating)
+        if comment:
+            review['comment'] = comment
+        if image:
+            fs = FileSystemStorage()
+            filename = fs.save(image.name, image)
+            review['image_url'] = fs.url(filename)
+
+        review['timestamp'] = datetime.now().isoformat()
+
+        user_profile.user_reviews[review_index] = review
+        user_profile.save()
+
+        return Response({
+            "success_msg": "Review updated successfully",
+            "updated_review": review
         }, status=status.HTTP_200_OK)
 
 
@@ -1751,7 +1877,7 @@ User = get_user_model()
 
 
 def calculate_distance(lat1, lon1, lat2, lon2):
-    """Calculate distance (km) between two lat/lon points."""
+
     R = 6371  # Earth radius in km
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
@@ -1763,121 +1889,81 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 
 @api_view(['POST'])
 def recommend_clubs(request):
-    print("\n========== [DEBUG] Recommend Clubs API Called ==========")
+  
 
-    # Step 1: Get email from request
     email = request.data.get("email")
     if not email:
-        print("[ERROR] Missing 'email' in request body")
         return Response({"error": "Email is required"}, status=400)
 
-    print(f"[DEBUG] Searching recommendations for user email: {email}")
-
-    # Step 2: Get user and profile
     try:
         user = User.objects.get(email=email)
         profile = UserProfile.objects.get(user=user)
-        print(f"[DEBUG] Found user & profile for {email}")
-    except User.DoesNotExist:
-        print(f"[ERROR] User not found for email: {email}")
-        return Response({"error": "User not found"}, status=404)
-    except UserProfile.DoesNotExist:
-        print(f"[ERROR] UserProfile not found for user: {email}")
-        return Response({"error": "User profile not found"}, status=404)
+    except Exception:
+        return Response({"error": "User or profile not found"}, status=404)
 
-    # Step 3: Get user location
-    try:
-        user_lat = float(profile.latitude)
-        user_lon = float(profile.longitude)
-        print(f"[DEBUG] User location: lat={user_lat}, lon={user_lon}")
-    except (TypeError, ValueError):
-        print(f"[ERROR] Invalid or missing user location for {email}")
-        return Response({"error": "User location missing"}, status=400)
+    user_lat = float(profile.latitude)
+    user_lon = float(profile.longitude)
 
-    # Step 4: Get user preferences
-    try:
-        user_music = set(str(x) for x in profile.music_preferences.all())
-        user_vibes = set(str(x) for x in profile.ideal_vibes.all())
-        user_crowd = set(str(x) for x in profile.crowd_atmosphere.all())
-        print("[DEBUG] User preferences:")
-        print(f"        Music: {user_music}")
-        print(f"        Vibes: {user_vibes}")
-        print(f"        Crowd: {user_crowd}")
-    except Exception as e:
-        print(f"[ERROR] Problem fetching user preferences: {e}")
-        return Response({"error": "Failed to read user preferences"}, status=500)
+    user_music = set(str(x) for x in profile.music_preferences.all())
+    user_vibes = set(str(x) for x in profile.ideal_vibes.all())
+    user_crowd = set(str(x) for x in profile.crowd_atmosphere.all())
 
-    # Step 5: Fetch all clubs
-    clubs = ClubProfile.objects.select_related('owner').all()
+    print(f"[DEBUG] User Preferences: Music={user_music}, Vibes={user_vibes}, Crowd={user_crowd}")
+
+    clubs = ClubProfile.objects.all()
     print(f"[DEBUG] Total clubs fetched: {clubs.count()}")
 
     recommendations = []
 
-    # Step 6: Loop through each club
     for club in clubs:
-        try:
-            owner = club.owner
-            if not owner or owner.latitude is None or owner.longitude is None:
-                print(f"[WARN] Skipping club {club.id} (missing owner or coordinates)")
-                continue
+        if club.latitude is None or club.longitude is None:
+            print(f"[WARN] Skipping club {club.id} → no coordinates")
+            continue
 
-            club_lat = float(owner.latitude)
-            club_lon = float(owner.longitude)
+        club_lat = float(club.latitude)
+        club_lon = float(club.longitude)
 
-            distance = calculate_distance(user_lat, user_lon, club_lat, club_lon)
-            print(f"[DEBUG] Club {club.id} distance = {distance:.2f} km")
+        distance = calculate_distance(user_lat, user_lon, club_lat, club_lon)
+        if distance > 15:  # Dhaka realistic limit
+            continue
 
-            if distance > 30:
-                print(f"[DEBUG] Skipping club {club.id} (too far: {distance:.2f} km)")
-                continue
+        # Extract club JSON-based preferences
+        club_music = set(club.features.get("music", []))
+        club_vibes = set(club.events.get("vibes", []))
+        club_crowd = set(club.crowd_atmosphere.get("crowd", []))
 
-            # Step 7: Extract club features safely
-            features = getattr(club, 'features', {}) or {}
-            events = getattr(club, 'events', {}) or {}
-            crowd = getattr(club, 'crowd_atmosphere', {}) or {}
+        print(f"[DEBUG] Club {club.id} Features:")
+        print(f"        Music: {club_music}")
+        print(f"        Vibes: {club_vibes}")
+        print(f"        Crowd: {club_crowd}")
 
-            club_music = set(features.get('music_preferences', []))
-            club_vibes = set(events.get('ideal_vibes', []))
-            club_crowd = set(crowd.get('crowd&atmosphere', []))
+        # Matching
+        music_match = len(user_music & club_music)
+        vibes_match = len(user_vibes & club_vibes)
+        crowd_match = len(user_crowd & club_crowd)
+        total_match = music_match + vibes_match + crowd_match
 
-            music_match = len(user_music.intersection(club_music))
-            vibes_match = len(user_vibes.intersection(club_vibes))
-            crowd_match = len(user_crowd.intersection(club_crowd))
-            total_match = music_match + vibes_match + crowd_match
+        print(f"[DEBUG] Club {club.id} match → M:{music_match}, V:{vibes_match}, C:{crowd_match}, Total:{total_match}")
 
-            print(f"[DEBUG] Club {club.id} match → "
-                  f"music={music_match}, vibes={vibes_match}, crowd={crowd_match}, total={total_match}")
+        if total_match > 0:
+            recommendations.append({
+                "id": club.id,
+                "name": club.venue_name,
+                "distance_km": round(distance, 2),
+                "total_match": total_match,
+            })
 
-            if total_match > 0:
-                recommendations.append({
-                    "id": club.id,
-                    "name": getattr(club, 'venue_name', 'Unknown'),
-                    "distance_km": round(distance, 2),
-                    "total_match": total_match,
-                    "music_match": music_match,
-                    "vibes_match": vibes_match,
-                    "crowd_match": crowd_match,
-                })
+    recommendations.sort(key=lambda x: (-x["total_match"], x["distance_km"]))
+    final_results = recommendations[:3]
 
-        except Exception as e:
-            print(f"[ERROR] Club {club.id} processing failed: {e}")
+    print(f"[INFO] Recommended: {final_results}")
 
-    # Step 8: Sort by best match & shortest distance
-    sorted_recommendations = sorted(
-        recommendations, key=lambda x: (-x['total_match'], x['distance_km'])
-    )
-
-    print(f"[INFO] Total recommended clubs for {email}: {len(sorted_recommendations)}")
-    for r in sorted_recommendations[:5]:
-        print(f"    → Club {r['id']} ({r['name']}) | "
-              f"match={r['total_match']} | distance={r['distance_km']} km")
-
-    # Step 9: Return final response
     return Response({
         "email": email,
-        "count": len(sorted_recommendations),
-        "results": sorted_recommendations[:5]
+        "count": len(final_results),
+        "results": final_results
     })
+
 
 
 
@@ -1888,7 +1974,7 @@ def recommend_clubs(request):
 # Best club id suggestion 
 
 def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371  
+    R = 6371
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
@@ -1896,10 +1982,13 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def top_recommended_club(request):
+
     user = request.user
+
     try:
         profile = UserProfile.objects.get(user=user)
     except UserProfile.DoesNotExist:
@@ -1911,36 +2000,41 @@ def top_recommended_club(request):
     except (TypeError, ValueError):
         return Response({"error": "User location missing"}, status=400)
 
-
     user_music = set(str(x) for x in profile.music_preferences.all())
     user_vibes = set(str(x) for x in profile.ideal_vibes.all())
     user_crowd = set(str(x) for x in profile.crowd_atmosphere.all())
 
-    clubs = ClubProfile.objects.select_related('owner').all()
+    clubs = ClubProfile.objects.all()
     recommendations = []
 
     for club in clubs:
-        owner = club.owner
-        if not owner or owner.latitude is None or owner.longitude is None:
+
+        if club.latitude is None or club.longitude is None:
             continue
 
-        distance = calculate_distance(user_lat, user_lon, float(owner.latitude), float(owner.longitude))
-        if distance > 30:
+        distance = calculate_distance(user_lat, user_lon,
+                                     float(club.latitude),
+                                     float(club.longitude))
+
+        if distance > 15:  # Dhaka realistic radius
             continue
 
-        club_music = set(club.features.get('music_preferences', []))
-        club_vibes = set(club.events.get('ideal_vibes', []))
-        club_crowd = set(club.crowd_atmosphere.get('crowd&atmosphere', []))
+        #  Correct keys
+        club_music = set(club.features.get('music', []))
+        club_vibes = set(club.events.get('vibes', []))
+        club_crowd = set(club.crowd_atmosphere.get('crowd', []))
 
-        music_match = len(user_music.intersection(club_music))
-        vibes_match = len(user_vibes.intersection(club_vibes))
-        crowd_match = len(user_crowd.intersection(club_crowd))
+        # Matching
+        music_match = len(user_music & club_music)
+        vibes_match = len(user_vibes & club_vibes)
+        crowd_match = len(user_crowd & club_crowd)
 
         total_match = music_match + vibes_match + crowd_match
 
         if total_match > 0:
             recommendations.append({
                 "id": club.id,
+                "name": club.venue_name,
                 "total_match": total_match,
                 "distance_km": round(distance, 2)
             })
@@ -1948,13 +2042,13 @@ def top_recommended_club(request):
     if not recommendations:
         return Response({"message": "No recommended club found"}, status=404)
 
-    top_club = sorted(recommendations, key=lambda x: (-x['total_match'], x['distance_km']))[0]
+    top_club = sorted(recommendations,
+                      key=lambda x: (-x['total_match'], x['distance_km']))[0]
 
-    return Response({
-        "top_recommended_club_id": top_club["id"],
-        "match_score": top_club["total_match"],
-        "distance_km": top_club["distance_km"]
-    })
+    return Response(top_club, status=200)
+
+
+
 
 # for Trending Club 
 
@@ -1977,9 +2071,9 @@ from .serializers import ClubProfileSerializered
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_trendy_club(request):
-    print("\n========== [DEBUG] get_trendy_club Called ==========")
+    
 
-    # Step 1️⃣: Get all clubs sorted by click count
+
     clubs = ClubProfile.objects.all().order_by('-click_count')
 
     if not clubs.exists():
@@ -1988,10 +2082,9 @@ def get_trendy_club(request):
 
     print(f"[DEBUG] Found {clubs.count()} clubs sorted by click count.")
 
-    # Step 2️⃣: Serialize data
+
     serializer = ClubProfileSerializered(clubs, many=True, context={'request': request})
 
-    # Step 3️⃣: Return sorted trendy list
     response_data = {
         "count": len(serializer.data),
         "results": serializer.data,

@@ -324,7 +324,7 @@ class EventSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Event
-        fields = ['id', 'name', 'club_name', 'owner_name', 'date', 'time', 'entry_fee', 'status', 'created_at']
+        fields = ['id', 'name', 'description', 'club_name', 'owner_name', 'date', 'time', 'entry_fee', 'status', 'created_at']
 
 
 
@@ -599,6 +599,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'latitude',
             'longitude',
             'about',
+            'user_reviews',
             'music_preferences',
             'ideal_vibes',
             'crowd_atmosphere',

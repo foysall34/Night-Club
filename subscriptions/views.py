@@ -1,4 +1,4 @@
-# subscriptions/views.py
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -235,7 +235,7 @@ class StripeWebhookView(APIView):
                 owner = ClubOwner.objects.filter(email=customer_email).first()
 
                 if not owner:
-                    print("⚠ Owner not found with email:", customer_email)
+                    print("Owner not found with email:", customer_email)
                     return Response(status=200)
 
                 if stripe_sub_id:
@@ -245,7 +245,7 @@ class StripeWebhookView(APIView):
                     )
                     self.sync_subscription(owner, stripe_sub)
 
-            # Subscription renewal or plan change
+   
             elif event_type in ('customer.subscription.updated', 'customer.subscription.created'):
                 stripe_sub = stripe.Subscription.retrieve(
                     data_obj.get('id'),
@@ -263,13 +263,13 @@ class StripeWebhookView(APIView):
     def sync_subscription(self, owner, stripe_sub):
         """ Owner Email Based DB Create + Update"""
         if not owner:
-            print("⚠ Owner missing for subscription sync!")
+            print(" Owner missing for subscription sync!")
             return
 
         stripe_sub_id = stripe_sub.get("id")
         price = stripe_sub["items"]["data"][0]["price"]["id"]
 
-        #  plan find matched with monthly / yearly price id
+
         plan = Plan.objects.filter(
             stripe_monthly_price_id=price
         ).first() or Plan.objects.filter(

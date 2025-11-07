@@ -52,6 +52,15 @@ MIDDLEWARE = [
 ]
 
 
+
+
+
+# Twilio API configuration
+INFOBIP_API_KEY = config("INFOBIP_API_KEY")
+INFOBIP_BASE_URL = config("INFOBIP_BASE_URL")
+
+
+
 # settings.py (add these)
 import os
 
@@ -217,3 +226,5 @@ TEMP_MEDIA_ROOT = os.path.join(MEDIA_ROOT, 'tmp')
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# nightclub@gmail.com
+# 123

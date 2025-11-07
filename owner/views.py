@@ -1004,6 +1004,9 @@ class UserChangePasswordAPIView(APIView):
             return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+
+
 class UserForgotPasswordAPIView(APIView):
     def post(self, request):
         serializer = ForgotPasswordOTPSerializer(data=request.data)
@@ -1017,6 +1020,9 @@ class UserForgotPasswordAPIView(APIView):
                 pass
             return Response({'message': 'If your email is registered, an OTP has been sent.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
 
 
 class UserResetPasswordAPIView(APIView):
@@ -2641,3 +2647,112 @@ def get_all_user_profiles(request):
     except Exception as e:
         print(f"[ERROR] Failed to fetch user profiles: {e}")
         return Response({"error": "Something went wrong while fetching profiles"}, status=500)
+
+
+
+
+
+
+# Twilio integration views.py  + send otp 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+from .models import User
+from .utils import generate_otp, send_otp_sms_infobip
+
+class ForgotPasswordMobileAPIView(APIView):
+    """
+    POST /auth/forgot-password-mobile/
+    Body: { "email": "user@gmail.com", "phone_number": "+8801743418894" }
+    """
+
+    def post(self, request):
+        email = request.data.get("email")
+        phone_number = request.data.get("phone_number")
+
+        if not email or not phone_number:
+            return Response(
+                {"error": "Email and phone_number are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {"message": "If your email exists, OTP has been sent."},
+                status=status.HTTP_200_OK
+            )
+
+        #  Generate OTP
+        otp = generate_otp()
+        user.otp = otp
+        user.otp_created_at = timezone.now()
+        user.save()
+
+        #  Send OTP via Infobip
+        success = send_otp_sms_infobip(phone_number, otp)
+        if success:
+            # ⚙️ Temporarily hold phone in session for verification step
+            request.session["pending_phone_number"] = phone_number
+            request.session["pending_user_email"] = email
+            return Response(
+                {"message": f"OTP sent successfully to {phone_number}"},
+                status=status.HTTP_200_OK
+            )
+        else:
+            return Response(
+                {"error": "Failed to send OTP via Infobip."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+
+
+# verify otp 
+class VerifyMobileOTPAPIView(APIView):
+    """
+    POST /auth/verify-mobile-otp/
+    Body: { "email": "user@gmail.com", "otp": "1234", "phone_number": "+8801743418894" }
+    """
+
+    def post(self, request):
+        email = request.data.get("email")
+        otp = request.data.get("otp")
+        phone_number = request.data.get("phone_number")
+
+        if not email or not otp or not phone_number:
+            return Response({"error": "Email, phone_number & OTP required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # ✅ Check OTP validity (within 5 min)
+        from datetime import timedelta
+        if not user.otp or timezone.now() > user.otp_created_at + timedelta(minutes=5):
+            return Response({"error": "OTP expired. Try again."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if user.otp != otp:
+            return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ✅ OTP valid → save phone number
+        user.phone_number = phone_number
+        user.otp = None
+        user.is_active = True
+        user.save()
+
+        return Response(
+            {"message": "Phone verified successfully & saved."},
+            status=status.HTTP_200_OK
+        )
+
+from django.conf import settings
+
+print("API_KEY ->", settings.INFOBIP_API_KEY)
+print("BASE_URL ->", settings.INFOBIP_BASE_URL)

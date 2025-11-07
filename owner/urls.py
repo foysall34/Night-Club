@@ -88,6 +88,8 @@ urlpatterns = [
     # Password Management
     path('user/change-password/', UserChangePasswordAPIView.as_view(), name='user-change-password'),
     path('user/forgot-password/', UserForgotPasswordAPIView.as_view(), name='user-forgot-password'),
+    path('user/forgot-password-mobile/', ForgotPasswordMobileAPIView.as_view(), name='forgot-password-mobile'),
+    path('user/verify-mobile-otp/', VerifyMobileOTPAPIView.as_view(), name='verify-mobile-otp'), #Twilio OTP--------------------
     path('user/reset-password/', UserResetPasswordAPIView.as_view(), name='user-reset-password'),
     path('user/places/', views.get_place_details, name='place-details'),
     path('clubs/<int:club_id>/reviews/', manage_club_reviews, name='manage-club-reviews'),

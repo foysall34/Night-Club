@@ -400,6 +400,26 @@ class ResetPasswordWithOTPSerializer(serializers.Serializer):
         
 
 
+# Twilio OTP Serializer
+
+from rest_framework import serializers
+
+class SendMobileOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
+
+    def validate_phone_number(self, value):
+        if value and not value.startswith('+'):
+            raise serializers.ValidationError("Phone number must include country code, e.g. +14155551234")
+        return value
+
+
+
+
+
+
+
+
 #=============================================================================
 #=============================================================================
 #===========================================================================

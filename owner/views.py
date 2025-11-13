@@ -19,7 +19,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import ClubOwner
 from .serializers import ClubOwnerRegistrationSerializer, OwnerVerifyOTPSerializer
-from .utils import generate_otp, send_otp_email
+from .utils import generate_otp, get_coordinates_from_city, send_otp_email
 import random
 from django.utils import timezone
 from datetime import timedelta
@@ -1850,111 +1850,137 @@ class ClubDetailView(generics.RetrieveAPIView):
         return Response(serializer.data)
     
 
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from .models import UserLocation
+from .serializers import UserLocationSerializer
+
+class UpdateUserLocationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        latitude = request.data.get('latitude')
+        longitude = request.data.get('longitude')
+
+        if not latitude or not longitude:
+            return Response({'error': 'latitude and longitude are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # save or update location
+        location, created = UserLocation.objects.update_or_create(
+            user=request.user,
+            defaults={'latitude': latitude, 'longitude': longitude}
+        )
+
+        serializer = UserLocationSerializer(location)
+        return Response({'message': 'Location updated successfully', 'data': serializer.data}, status=status.HTTP_200_OK)
+
+
+
+
 #************************************************************************************************
 # Final Recommedation api 
 #************************************************************************************************
 
-from math import radians, sin, cos, sqrt, atan2
-from rest_framework.decorators import api_view
+from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
 from django.contrib.auth import get_user_model
-from .models import UserProfile, ClubProfile
 
 User = get_user_model()
 
+class RecommendClubsView(APIView):
+    """
+    Recommend top 5 clubs based on:
+    - vibes matching
+    - features & events matching
+    - distance (Geoapify)
+    """
 
-def calculate_distance(lat1, lon1, lat2, lon2):
+    def post(self, request):
+        user_email = request.data.get("email")
+        if not user_email:
+            return Response({"error": "Email is required"}, status=400)
 
-    R = 6371  # Earth radius in km
-    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return R * c
+        #  User fetch
+        try:
+            user = User.objects.get(email=user_email)
+            user_profile = user.userprofile
+        except:
+            return Response({"error": "User not found"}, status=404)
 
+        #  User Location Determine
+        if user_profile.latitude and user_profile.longitude:
+            user_lat = float(user_profile.latitude)
+            user_lon = float(user_profile.longitude)
+        else:
+            # fetch from city name
+            user_lat, user_lon = get_coordinates_from_city(user_profile.city)
+            if not user_lat:
+                return Response({"error": "Cannot find user coordinates"}, status=400)
 
-@api_view(['POST'])
-def recommend_clubs(request):
-  
+        # User vibe-related sets
+        user_musics = set(user_profile.music_preferences.values_list("name", flat=True))
+        user_vibes = set(user_profile.ideal_vibes.values_list("name", flat=True))
+        user_crowds = set(user_profile.crowd_atmosphere.values_list("name", flat=True))
 
-    email = request.data.get("email")
-    if not email:
-        return Response({"error": "Email is required"}, status=400)
+        clubs_data = []
 
-    try:
-        user = User.objects.get(email=email)
-        profile = UserProfile.objects.get(user=user)
-    except Exception:
-        return Response({"error": "User or profile not found"}, status=404)
+        #  All clubs
+        for club in ClubProfile.objects.select_related("owner").all():
 
-    user_lat = float(profile.latitude)
-    user_lon = float(profile.longitude)
+            # Skip club without coordinates
+            if not club.latitude or not club.longitude:
+                continue
 
-    user_music = set(str(x) for x in profile.music_preferences.all())
-    user_vibes = set(str(x) for x in profile.ideal_vibes.all())
-    user_crowd = set(str(x) for x in profile.crowd_atmosphere.all())
+            # Distance
+            distance = calculate_distance(
+                user_lat, user_lon,
+                float(club.latitude), float(club.longitude)
+            )
 
-    print(f"[DEBUG] User Preferences: Music={user_music}, Vibes={user_vibes}, Crowd={user_crowd}")
+            if distance > 30:  
+                continue  # too far
 
-    clubs = ClubProfile.objects.all()
-    print(f"[DEBUG] Total clubs fetched: {clubs.count()}")
+            # Convert JSON fields to sets
+            club_features = set(club.features.keys())
+            club_events = set(club.events.keys())
+            club_crowd = set(club.crowd_atmosphere.keys())
 
-    recommendations = []
+            # Scoring
+            score = 0
 
-    for club in clubs:
-        if club.latitude is None or club.longitude is None:
-            print(f"[WARN] Skipping club {club.id} → no coordinates")
-            continue
+            if user_musics.intersection(club_features):
+                score += 20
 
-        club_lat = float(club.latitude)
-        club_lon = float(club.longitude)
+            if user_vibes.intersection(club_events):
+                score += 30
 
-        distance = calculate_distance(user_lat, user_lon, club_lat, club_lon)
-        if distance > 15:  
-            continue
+            if user_crowds.intersection(club_crowd):
+                score += 30
 
+            # Proximity bonus
+            if distance <= 15:
+                score += 20
 
-        club_music = set(club.features.get("music", []))
-        club_vibes = set(club.events.get("vibes", []))
-        club_crowd = set(club.crowd_atmosphere.get("crowd", []))
-
-        print(f"[DEBUG] Club {club.id} Features:")
-        print(f"        Music: {club_music}")
-        print(f"        Vibes: {club_vibes}")
-        print(f"        Crowd: {club_crowd}")
-
-
-        music_match = len(user_music & club_music)
-        vibes_match = len(user_vibes & club_vibes)
-        crowd_match = len(user_crowd & club_crowd)
-        total_match = music_match + vibes_match + crowd_match
-
-        print(f"[DEBUG] Club {club.id} match → M:{music_match}, V:{vibes_match}, C:{crowd_match}, Total:{total_match}")
-
-        if total_match > 0:
-            recommendations.append({
-                "id": club.id,
-                "name": club.venue_name,
+            clubs_data.append({
+                "club_id": club.id,
+                "club_name": club.venue_name,
+                "city": club.venue_city,
                 "distance_km": round(distance, 2),
-                "total_match": total_match,
+                "score": score,
             })
 
-    recommendations.sort(key=lambda x: (-x["total_match"], x["distance_km"]))
-    final_results = recommendations[:3]
+        # Sort by score
+        clubs_data = sorted(clubs_data, key=lambda x: x["score"], reverse=True)
 
-    print(f"[INFO] Recommended: {final_results}")
+        if not clubs_data:
+            return Response({"message": "no club found to recommended"}, status=200)
 
-    return Response({
-        "email": email,
-        "count": len(final_results),
-        "results": final_results
-    })
-
-
-
-
-
+        return Response({"recommended_clubs": clubs_data[:5]})
 
 
 
@@ -2685,16 +2711,16 @@ class ForgotPasswordMobileAPIView(APIView):
                 status=status.HTTP_200_OK
             )
 
-        #  Generate OTP
+     
         otp = generate_otp()
         user.otp = otp
         user.otp_created_at = timezone.now()
         user.save()
 
-        #  Send OTP via Infobip
+
         success = send_otp_sms_infobip(phone_number, otp)
         if success:
-            # ⚙️ Temporarily hold phone in session for verification step
+       
             request.session["pending_phone_number"] = phone_number
             request.session["pending_user_email"] = email
             return Response(
@@ -2732,7 +2758,6 @@ class VerifyMobileOTPAPIView(APIView):
         except User.DoesNotExist:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # ✅ Check OTP validity (within 5 min)
         from datetime import timedelta
         if not user.otp or timezone.now() > user.otp_created_at + timedelta(minutes=5):
             return Response({"error": "OTP expired. Try again."},
@@ -2741,7 +2766,7 @@ class VerifyMobileOTPAPIView(APIView):
         if user.otp != otp:
             return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ OTP valid → save phone number
+
         user.phone_number = phone_number
         user.otp = None
         user.is_active = True
@@ -2752,7 +2777,3 @@ class VerifyMobileOTPAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
-from django.conf import settings
-
-print("API_KEY ->", settings.INFOBIP_API_KEY)
-print("BASE_URL ->", settings.INFOBIP_BASE_URL)

@@ -91,6 +91,8 @@ urlpatterns = [
     path('user/forgot-password-mobile/', ForgotPasswordMobileAPIView.as_view(), name='forgot-password-mobile'),
     path('user/verify-mobile-otp/', VerifyMobileOTPAPIView.as_view(), name='verify-mobile-otp'), #Twilio OTP--------------------
     path('user/reset-password/', UserResetPasswordAPIView.as_view(), name='user-reset-password'),
+    path('user/update-location/', UpdateUserLocationView.as_view(), name='update-location'),   ### user location  api
+
     path('user/places/', views.get_place_details, name='place-details'),
     path('clubs/<int:club_id>/reviews/', manage_club_reviews, name='manage-club-reviews'),
     path('clubs/<int:club_id>/user_review/', manage_club_reviewed, name='manage-club-redsfviews'), #review #review
@@ -100,7 +102,7 @@ urlpatterns = [
 
     path('users/<int:user_id>/toggle-follow/', FollowToggleView.as_view(), name='toggle-follow'),
     path('profile/', UserProfileView.as_view(), name='user-profile'), 
-    path('clubs/recommend/', recommend_clubs, name='recommend-clubs'), # User preference details api
+    path('clubs/recommend/', RecommendClubsView.as_view(), name='recommend-clubs'), # User preference details api
     path('trendy-club/' , get_trendy_club , name= 'trendy') ,
     path('clubs/<int:club_id>/click/', views.club_click, name='club_click'),  # relation with trending
     path('all-events/', get_all_events, name='get_all_events'),

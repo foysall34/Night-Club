@@ -77,3 +77,38 @@ def send_otp_sms_infobip(phone_number, otp):
         print(" Infobip API Error:", e)
         return False
 
+
+
+import requests
+from django.conf import settings
+
+def get_coordinates_from_city(city_name):
+    url = f"https://api.geoapify.com/v1/geocode/search"
+    params = {
+        "text": city_name,
+        "apiKey": settings.GEOAPIFY_API_KEY
+    }
+    r = requests.get(url, params=params)
+    data = r.json()
+
+    if data["features"]:
+        lat = data["features"][0]["properties"]["lat"]
+        lon = data["features"][0]["properties"]["lon"]
+        return lat, lon
+    
+    return None, None
+
+
+from math import radians, sin, cos, sqrt, atan2
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    R = 6371  # Earth radius in KM
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+    return R * c

@@ -259,7 +259,14 @@ class UserProfile(models.Model):
 
 
 
+class UserLocation(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return f"{self.user.id} - {self.latitude}, {self.longitude}"
 
 
 
@@ -323,7 +330,6 @@ class ClubProfile(models.Model):
     vibes_type = models.ManyToManyField(Vibes_Choice, blank=True)
     dressCode = models.CharField(max_length=255, blank=True)
     about = models.TextField(max_length=5000 , default='write about')
-    club_location = models.CharField(max_length=100 , default='write city')
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     ageRequirement = models.CharField(max_length=100, blank=True)

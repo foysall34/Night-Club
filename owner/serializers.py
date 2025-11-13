@@ -400,7 +400,7 @@ class ResetPasswordWithOTPSerializer(serializers.Serializer):
         
 
 
-# Twilio OTP Serializer
+# Infobip OTP Serializer
 
 from rest_framework import serializers
 
@@ -415,6 +415,14 @@ class SendMobileOTPSerializer(serializers.Serializer):
 
 
 
+
+
+from .models import UserLocation
+
+class UserLocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserLocation
+        fields = ['latitude', 'longitude']
 
 
 

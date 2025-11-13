@@ -42,6 +42,10 @@ urlpatterns = [
 
   
     path('club-recomend-info/<int:pk>/', ClubDetailView.as_view(), name='club-detail'),
+    path("events/summary/", EventSummaryByOwnerEmailView.as_view()),
+    path('events/<int:event_id>/', EventDetailView.as_view(), name='event-detail'),
+   #live , this month event , total views
+
     path('owner/dashborad-status/', DashboardStatsView.as_view(), name='club-detail'),
     path('owner/anlytical-dashborad-status/', AnalyticalDashboard.as_view(), name='club-'),
 

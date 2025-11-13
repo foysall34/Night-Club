@@ -22,7 +22,7 @@ class MusicGenreAdmin(admin.ModelAdmin):
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ('id', 'club' , 'name')
+    list_display = ('id', 'club' , 'name' , 'status')
 
 
 @admin.register(ClubProfile)

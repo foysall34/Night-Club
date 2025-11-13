@@ -463,6 +463,86 @@ class EventsByOwnerEmailView(APIView):
 
 
 
+# dashboard views.py code 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.db import models
+
+class EventSummaryByOwnerEmailView(APIView):
+    def get(self, request):
+        email = request.GET.get('email')
+
+        if not email:
+            return Response({"error": "Email is required as GET param."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        owner = get_object_or_404(ClubOwner, email=email)
+        club_profiles = ClubProfile.objects.filter(owner=owner)
+
+        if not club_profiles.exists():
+            return Response({"error": "No club profile found for this owner."},
+                            status=status.HTTP_404_NOT_FOUND)
+
+
+        today = timezone.now()
+        first_day = today.replace(day=1)
+
+        # Filter events of this month
+        events = Event.objects.filter(
+            club__in=club_profiles,
+            date__gte=first_day.date(),
+            date__lte=today.date()
+        )
+
+        # Total monthly events
+        total_events = events.count()
+
+        # Live events (assume status="live")
+        live_events = events.filter(status="live")
+
+        # Live event names
+        live_event_names = list(live_events.values_list("name", flat=True))
+
+        # Total views
+        total_views = events.aggregate(total=models.Sum("views"))["total"] or 0
+
+        # Live event details (name + views)
+        live_event_details = [
+            {
+                "name": e.name,
+                "views": e.views
+            }
+            for e in live_events
+        ]
+
+        return Response({
+            "owner_email": email,
+            "current_month": today.strftime("%B %Y"),
+            "current_month_total_events": total_events,
+            "current_month_live_events": live_events.count(),
+            "current_month_total_views": total_views,
+            "live_event_names": live_event_names,
+            "live_event_details": live_event_details
+        })
+
+# Event increase view count API view
+
+class EventDetailView(APIView):
+    def get(self, request, event_id):
+        event = get_object_or_404(Event, id=event_id)
+        
+        event.views += 1
+        event.save(update_fields=["views"])
+
+        serializer = EventSerializer(event)
+        return Response(serializer.data)
+
+
+
+
 class ClubProfileRetrieveUpdateDestroyAPIView(APIView):
     authentication_classes = [ClubOwnerAuthentication]
     permission_classes = [IsAuthenticated]
@@ -2543,7 +2623,7 @@ class ClubSelectionView(APIView):
                 "with": who_with
             }, status=status.HTTP_200_OK)
 
-        # ✅ Randomly pick up to 3 clubs
+  
         clubs = random.sample(list(matching_clubs), min(3, matching_clubs.count()))
 
         data = {

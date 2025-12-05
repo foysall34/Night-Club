@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice,UserProfile, Event , MusicGenre , Vibe ,CrowdAtmosphere
+from .models import ClubOwner, ClubProfile, LegalContent, ClubType, Vibes_Choice,UserProfile, Event , MusicGenre , Vibe ,CrowdAtmosphere 
+
+
 
 admin.site.register(Vibe)
 admin.site.register(ClubType)

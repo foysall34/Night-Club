@@ -63,6 +63,9 @@ class OwnerRegisterView(generics.CreateAPIView):
             {"message": "User registered successfully. Please check your email for OTP."},
             status=status.HTTP_201_CREATED)
 
+
+
+
 class OwnerVerifyOTPView(APIView):
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
@@ -1965,102 +1968,131 @@ class UpdateUserLocationView(APIView):
 # Final Recommedation api 
 #************************************************************************************************
 
+import logging
+import requests
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from django.conf import settings
 from django.contrib.auth import get_user_model
 
+from .models import ClubProfile
+from .utils import calculate_distance, get_coordinates_from_city
+
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
+
 class RecommendClubsView(APIView):
-    """
-    Recommend top 5 clubs based on:
-    - vibes matching
-    - features & events matching
-    - distance (Geoapify)
-    """
 
     def post(self, request):
+        logger.info("=== [RecommendClubsView] API Called ===")
+        logger.info(f"Incoming request: {request.data}")
+
         user_email = request.data.get("email")
         if not user_email:
             return Response({"error": "Email is required"}, status=400)
 
-        #  User fetch
+        # Fetch user
         try:
             user = User.objects.get(email=user_email)
             user_profile = user.userprofile
         except:
+            logger.error("User not found")
             return Response({"error": "User not found"}, status=404)
 
-        #  User Location Determine
+        # -------------------------
+        # USER LOCATION
+        # -------------------------
         if user_profile.latitude and user_profile.longitude:
             user_lat = float(user_profile.latitude)
             user_lon = float(user_profile.longitude)
         else:
-            # fetch from city name
+            logger.info(f"Fetching Geoapify coordinates for city: {user_profile.city}")
             user_lat, user_lon = get_coordinates_from_city(user_profile.city)
+
             if not user_lat:
-                return Response({"error": "Cannot find user coordinates"}, status=400)
+                return Response({"error": "Cannot fetch user coordinates"}, status=400)
 
-        # User vibe-related sets
-        user_musics = set(user_profile.music_preferences.values_list("name", flat=True))
+        # User vibes
+        user_music = set(user_profile.music_preferences.values_list("name", flat=True))
         user_vibes = set(user_profile.ideal_vibes.values_list("name", flat=True))
-        user_crowds = set(user_profile.crowd_atmosphere.values_list("name", flat=True))
+        user_crowd = set(user_profile.crowd_atmosphere.values_list("name", flat=True))
 
-        clubs_data = []
+        recommended = []
+        clubs = ClubProfile.objects.all()
 
-        #  All clubs
-        for club in ClubProfile.objects.select_related("owner").all():
+        # -------------------------
+        # CLUB LOOP
+        # -------------------------
+        for club in clubs:
 
-            # Skip club without coordinates
-            if not club.latitude or not club.longitude:
+            # ----------------------------------------
+            # GET CLUB LOCATION USING venue_city
+            # ----------------------------------------
+            if club.latitude and club.longitude:
+                club_lat = float(club.latitude)
+                club_lon = float(club.longitude)
+            else:
+                logger.info(f"Fetching Geoapify coordinates for club city: {club.venue_city}")
+
+                club_lat, club_lon = get_coordinates_from_city(club.venue_city)
+
+                if not club_lat:
+                    logger.warning(f"Skipping {club.venue_name}: cannot fetch coordinates")
+                    continue
+
+                # Save to database once fetched (so no future API calls)
+                club.latitude = club_lat
+                club.longitude = club_lon
+                club.save(update_fields=["latitude", "longitude"])
+                logger.info(f"Saved coordinates for club {club.venue_name}")
+
+            # -------------------------
+            # Distance
+            # -------------------------
+            distance = calculate_distance(user_lat, user_lon, club_lat, club_lon)
+            logger.info(f"{club.venue_name} distance: {distance:.2f} km")
+
+            if distance > 30:
                 continue
 
-            # Distance
-            distance = calculate_distance(
-                user_lat, user_lon,
-                float(club.latitude), float(club.longitude)
-            )
+            # Club JSON fields
+            club_music = set(club.features.keys()) if club.features else set()
+            club_vibes = set(club.events.keys()) if club.events else set()
+            club_crowd = set(club.crowd_atmosphere.keys()) if club.crowd_atmosphere else set()
 
-            if distance > 30:  
-                continue  # too far
-
-            # Convert JSON fields to sets
-            club_features = set(club.features.keys())
-            club_events = set(club.events.keys())
-            club_crowd = set(club.crowd_atmosphere.keys())
-
+            # -------------------------
             # Scoring
+            # -------------------------
             score = 0
 
-            if user_musics.intersection(club_features):
-                score += 20
+            if user_music.intersection(club_music):
+                score += 25
 
-            if user_vibes.intersection(club_events):
-                score += 30
+            if user_vibes.intersection(club_vibes):
+                score += 35
 
-            if user_crowds.intersection(club_crowd):
-                score += 30
+            if user_crowd.intersection(club_crowd):
+                score += 25
 
-            # Proximity bonus
-            if distance <= 15:
-                score += 20
+            if distance <= 10:
+                score += 15
 
-            clubs_data.append({
+            recommended.append({
                 "club_id": club.id,
-                "club_name": club.venue_name,
+                "name": club.venue_name,
                 "city": club.venue_city,
                 "distance_km": round(distance, 2),
                 "score": score,
             })
 
-        # Sort by score
-        clubs_data = sorted(clubs_data, key=lambda x: x["score"], reverse=True)
+        # Sort
+        recommended = sorted(recommended, key=lambda x: x["score"], reverse=True)
 
-        if not clubs_data:
-            return Response({"message": "no club found to recommended"}, status=200)
+        if not recommended:
+            return Response({"message": "No nearby club found"}, status=200)
 
-        return Response({"recommended_clubs": clubs_data[:5]})
+        return Response({"recommended_clubs": recommended[:5]}, status=200)
 
 
 
@@ -2857,3 +2889,130 @@ class VerifyMobileOTPAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
+
+
+
+
+
+
+
+
+# Use Google Places API to get popular nightclubs in NYC
+
+import requests
+from django.core.cache import cache
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.conf import settings
+
+from .services import (
+    GOOGLE_API_KEY,
+    fetch_nyc_nightclubs_textsearch,
+    fetch_place_details,
+    build_photo_url
+)
+
+
+class NYCNightclubsAPIView(APIView):
+    """
+    GET /api/places/nyc-nightclubs/?limit=20
+
+    Returns up to `limit` (default 20) popular nightclubs in New York City.
+    Uses Google Places Text Search + Place Details.
+    Results are cached for 10 minutes.
+    """
+
+    CACHE_KEY = 'nyc_nightclubs_v1'
+    CACHE_TTL = 60 * 10  # 10 minutes
+
+    def get(self, request):
+        limit = int(request.query_params.get('limit', 20))
+        limit = max(1, min(limit, 50))  # limit between 1–50
+
+        # Check cache
+        cached = cache.get(self.CACHE_KEY)
+        if cached:
+            data = cached[:limit]
+            return Response({"count": len(data), "results": data})
+
+        if not GOOGLE_API_KEY:
+            return Response(
+                {"detail": "Google API key not configured."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        try:
+            # 1) Text search for NYC nightclubs
+            text_res = fetch_nyc_nightclubs_textsearch(GOOGLE_API_KEY)
+
+            if text_res.get("status") not in ("OK", "ZERO_RESULTS"):
+                return Response(
+                    {"detail": "Google Places Text Search error", "status": text_res.get("status")},
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
+
+            candidates = text_res.get("results", [])
+
+            # Sort by popularity
+            def popularity_key(p):
+                return (
+                    p.get("rating") or 0,
+                    p.get("user_ratings_total") or 0
+                )
+
+            candidates_sorted = sorted(candidates, key=popularity_key, reverse=True)
+            selected = candidates_sorted[:limit]
+
+            results = []
+
+            for item in selected:
+                place_id = item.get("place_id")
+
+                # 2) Details API call
+                details_json = fetch_place_details(GOOGLE_API_KEY, place_id)
+
+                if details_json.get("status") != "OK":
+                    continue
+
+                d = details_json.get("result", {})
+
+                photos = []
+                for p in d.get("photos", [])[:5]:
+                    ref = p.get("photo_reference")
+                    if ref:
+                        photos.append(build_photo_url(GOOGLE_API_KEY, ref))
+
+                geom = d.get("geometry", {}).get("location", {})
+
+                results.append({
+                    "place_id": d.get("place_id"),
+                    "name": d.get("name"),
+                    "address": d.get("formatted_address"),
+                    "lat": geom.get("lat"),
+                    "lng": geom.get("lng"),
+                    "rating": d.get("rating"),
+                    "user_ratings_total": d.get("user_ratings_total"),
+                    "phone": d.get("formatted_phone_number") or d.get("international_phone_number"),
+                    "website": d.get("website"),
+                    "opening_hours": d.get("opening_hours"),
+                    "photos": photos,
+                    "maps_url": d.get("url"),
+                })
+
+            # Cache for 10 minutes
+            cache.set(self.CACHE_KEY, results, timeout=self.CACHE_TTL)
+
+            return Response({"count": len(results), "results": results})
+
+        except requests.HTTPError as e:
+            return Response(
+                {"detail": "Error calling Google APIs", "error": str(e)},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        except Exception as e:
+            return Response(
+                {"detail": "Internal error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

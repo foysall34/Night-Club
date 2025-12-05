@@ -122,7 +122,12 @@ urlpatterns = [
     path("plan-tonight/selection/", ClubSelectionView.as_view(), name="club_selection"),  # plan night today
     path('owner/club-details/', OwnerClubDetailsView.as_view(), name='owner_club_details'),
     path('all-clubs/', AllClubListView.as_view(), name='all_clubs'),
-    path('users-all/', get_all_user_profiles, name='get_all_user_profiles'),  #all user details
+    path('users-all/', get_all_user_profiles, name='get_all_user_profiles'), 
+    path('api/places/nyc-nightclubs/', NYCNightclubsAPIView.as_view(), name='nyc-nightclubs'),
+
+
+
+ #all usr details
 
 
  

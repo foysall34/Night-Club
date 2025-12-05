@@ -413,3 +413,41 @@ class LegalContent(models.Model):
         verbose_name = "Legal Content"
         verbose_name_plural = "Legal Contents"
         ordering = ['content_type']
+
+
+
+
+
+# all night -club model 
+
+
+
+# nightlife/models.py
+from django.db import models
+
+class Nightclub(models.Model):
+    name = models.CharField(max_length=255, null=True, blank=True)
+    address = models.TextField(null=True, blank=True)
+
+    lat = models.FloatField(null=True, blank=True)
+    lon = models.FloatField(null=True, blank=True)
+
+    place_id = models.CharField(max_length=255, unique=True)  # fsq_id
+    categories = models.JSONField(null=True, blank=True)
+    opening_hours = models.JSONField(null=True, blank=True)
+
+    phone = models.CharField(max_length=80, null=True, blank=True)
+    website = models.CharField(max_length=500, null=True, blank=True)
+    email = models.CharField(max_length=200, null=True, blank=True)
+
+    city = models.CharField(max_length=120, null=True, blank=True)
+    state = models.CharField(max_length=120, null=True, blank=True)
+    country = models.CharField(max_length=120, null=True, blank=True)
+
+    popularity = models.FloatField(null=True, blank=True)  # if available
+    raw = models.JSONField(null=True, blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name or self.place_id

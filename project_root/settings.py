@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'myapp' ,
     'owner',
     'subscriptions',
+    'all_club',
   
 
     # framework 
@@ -66,9 +67,11 @@ import os
 
 STRIPE_API_KEY = config("STRIPE_API_KEY")
 STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET")
+GOOGLE_API_KEY = config("GOOGLE_API_KEY")
 
 # settings.py
 GEOAPIFY_API_KEY = config("GEOAPIFY_API_KEY")
+print("GEOAPIFY_API_KEY:", GEOAPIFY_API_KEY)
 
 
 STRIPE_PRICE_IDS = {
@@ -135,6 +138,29 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "https://category-pose-donations-plants.trycloudflare.com"
 ]
+
+
+
+# settings.py (add)
+
+
+
+
+# Celery settings (example)
+CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
+CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/0"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "Asia/Dhaka"
+
+CELERY_BEAT_SCHEDULE = {
+    "sync-nightclubs-every-day": {
+        "task": "nightlife.tasks.fetch_all_city_nightclubs",
+        "schedule": 60 * 60 * 24,  # once per day
+    }
+}
+
 
 
 from datetime import timedelta

@@ -8,6 +8,18 @@ from rest_framework.decorators import api_view
 from django.core.files.base import ContentFile
 from django.conf import settings
 import os
+from .utils import get_geoapify_coordinates
+
+
+
+
+from rest_framework import serializers
+from django.core.files.base import ContentFile
+from django.conf import settings
+import os
+from .models import ClubOwner, ClubProfile
+from .utils import get_geoapify_coordinates
+
 
 class ClubOwnerRegistrationSerializer(serializers.Serializer):
     full_name = serializers.CharField(required=True)
@@ -17,7 +29,7 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
     venue_name = serializers.CharField(required=True)
     venue_city = serializers.CharField(required=True)
     proof_doc = serializers.FileField(required=True)
-    profile_image=serializers.FileField(required= True)
+    profile_image = serializers.FileField(required=True)
     id_front_page = serializers.FileField(required=True)
     id_back_page = serializers.FileField(required=True)
 
@@ -27,67 +39,50 @@ class ClubOwnerRegistrationSerializer(serializers.Serializer):
         return value
 
     def create(self, validated_data):
-        # Step 1: Geocode location
-        geolocator = Nominatim(user_agent="night_club_app")
-        full_address = f"{validated_data['venue_name']}, {validated_data['venue_city']}"
+        venue_city = validated_data["venue_city"]
 
-        lat, lon = None, None
-        try:
-            location = geolocator.geocode(full_address, timeout=10)
-            if location:
-                lat, lon = location.latitude, location.longitude
-        except (GeocoderTimedOut, GeocoderUnavailable) as e:
-            print(f"Geocoding error: {e}")
+        # ===============================
+        # GEOAPIFY → GET LAT/LON
+        # ===============================
+        lat, lon = get_geoapify_coordinates(venue_city)
+        print("GEOAPIFY RESULT:", lat, lon)   # debug
 
-        #  Step 2: Create ClubOwner
+        if not lat:
+            raise serializers.ValidationError("Geoapify could not fetch lat/lon")
+
+        # ===============================
+        # CREATE OWNER
+        # ===============================
         user = ClubOwner.objects.create_user(
-            email=validated_data['email'],
-            full_name=validated_data['full_name'],
-            password=validated_data['password'],
-            phone_number=validated_data['phone_number'],
-            venue_name=validated_data['venue_name'],
-            venue_city=validated_data['venue_city'],
-            profile_image=validated_data['profile_image'],
-            proof_doc=validated_data['proof_doc'],
-            id_front_page=validated_data['id_front_page'],
-            id_back_page=validated_data['id_back_page'],
+            email=validated_data["email"],
+            full_name=validated_data["full_name"],
+            password=validated_data["password"],
+            phone_number=validated_data["phone_number"],
+            venue_name=validated_data["venue_name"],
+            venue_city=venue_city,
+            profile_image=validated_data["profile_image"],
+            proof_doc=validated_data["proof_doc"],
+            id_front_page=validated_data["id_front_page"],
+            id_back_page=validated_data["id_back_page"],
             latitude=lat,
             longitude=lon
         )
 
-        #  Step 3: Check if venue already exists
-        existing_club = ClubProfile.objects.filter(venue_name__iexact=validated_data['venue_name']).first()
-
-        if existing_club:
-           
-            existing_club.owner = user
-            existing_club.save()
-            print(f"Existing ClubProfile linked with {user.email}")
-        else:
-    
-            default_image_path = os.path.join(settings.MEDIA_ROOT, 'defaults/default_club.jpg')
-
-            club_profile = ClubProfile.objects.create(
-                owner=user,
-                venue_name=validated_data['venue_name'],
-                venue_city=validated_data['venue_city'],
-                club_location=validated_data['venue_city'],
-                latitude=lat,
-                longitude=lon,
-                email=validated_data['email'],
-                phone=validated_data['phone_number'],
-            )
-
-    
-            if os.path.exists(default_image_path):
-                with open(default_image_path, 'rb') as f:
-                    club_profile.clubImageUrl.save('default_club.jpg', ContentFile(f.read()), save=True)
-
-            print(f"New ClubProfile created for {user.email}")
+        # ===============================
+        # CREATE/UPDATE ClubProfile
+        # ===============================
+        club = ClubProfile.objects.create(
+            owner=user,
+            venue_name=validated_data["venue_name"],
+            venue_city=venue_city,
+       
+            latitude=lat,
+            longitude=lon,
+            email=user.email,
+            phone=validated_data["phone_number"]
+        )
 
         return user
-
-
 
 
 
@@ -651,3 +646,24 @@ class ClubProfileSerializered(serializers.ModelSerializer):
             'click_count',
             'owner_email',
         ]
+
+
+
+
+
+from rest_framework import serializers
+
+
+class NightclubSerializer(serializers.Serializer):
+    place_id = serializers.CharField()
+    name = serializers.CharField()
+    address = serializers.CharField(allow_null=True)
+    lat = serializers.FloatField()
+    lng = serializers.FloatField()
+    rating = serializers.FloatField(allow_null=True)
+    user_ratings_total = serializers.IntegerField(allow_null=True)
+    phone = serializers.CharField(allow_null=True)
+    website = serializers.URLField(allow_null=True)
+    opening_hours = serializers.DictField(child=serializers.ListField(), allow_null=True)
+    photos = serializers.ListField(child=serializers.URLField(), allow_empty=True)
+    maps_url = serializers.URLField(allow_null=True)

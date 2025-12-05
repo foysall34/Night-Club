@@ -79,36 +79,94 @@ def send_otp_sms_infobip(phone_number, otp):
 
 
 
+from math import radians, sin, cos, sqrt, atan2
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    R = 6371  # km
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+
+    d_lat = lat2 - lat1
+    d_lon = lon2 - lon1
+
+    a = sin(d_lat/2)**2 + cos(lat1) * cos(lat2) * sin(d_lon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+
+    return R * c
+
+
+
 import requests
 from django.conf import settings
 
 def get_coordinates_from_city(city_name):
-    url = f"https://api.geoapify.com/v1/geocode/search"
-    params = {
-        "text": city_name,
-        "apiKey": settings.GEOAPIFY_API_KEY
-    }
-    r = requests.get(url, params=params)
-    data = r.json()
+    GEOAPIFY_API_KEY = settings.GEOAPIFY_API_KEY
 
-    if data["features"]:
-        lat = data["features"][0]["properties"]["lat"]
-        lon = data["features"][0]["properties"]["lon"]
+    url = f"https://api.geoapify.com/v1/geocode/search?text={city_name}&apiKey={GEOAPIFY_API_KEY}"
+
+    try:
+        response = requests.get(url).json()
+        features = response.get("features")
+
+        if not features:
+            return None, None
+
+        coords = features[0]["geometry"]["coordinates"]
+        lon, lat = coords[0], coords[1]
         return lat, lon
-    
-    return None, None
+
+    except Exception as e:
+        print("Geoapify Error:", e)
+        return None, None
 
 
-from math import radians, sin, cos, sqrt, atan2
+import requests
+from django.conf import settings
 
-def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371  # Earth radius in KM
-    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+def get_geoapify_coordinates(city):
+    api_key = settings.GEOAPIFY_API_KEY
+    url = f"https://api.geoapify.com/v1/geocode/search?text={city}&format=json&apiKey={api_key}"
 
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
+    try:
+        response = requests.get(url).json()
 
-    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        if response.get("results"):
+            lat = response["results"][0]["lat"]
+            lon = response["results"][0]["lon"]
+            return lat, lon
+        return None, None
 
-    return R * c
+    except Exception as e:
+        print("Geoapify error:", e)
+        return None, None
+
+
+
+
+
+
+
+# nightlife/services/bbox_utils.py
+import math
+# nightlife/services/grid_utils.py
+def split_bbox_to_centers(bbox, rows=3, cols=3):
+    """
+    Input bbox: 'min_lon,min_lat,max_lon,max_lat'
+    Output: list of (lat, lon) centers for grid tiles.
+    Default 3x3 -> 9 center points.
+    Increase rows/cols for denser coverage.
+    """
+    min_lon, min_lat, max_lon, max_lat = map(float, bbox.split(","))
+    lon_step = (max_lon - min_lon) / cols
+    lat_step = (max_lat - min_lat) / rows
+
+    centers = []
+    for r in range(rows):
+        for c in range(cols):
+            left = min_lon + c * lon_step
+            right = left + lon_step
+            bottom = min_lat + r * lat_step
+            top = bottom + lat_step
+            center_lon = (left + right) / 2
+            center_lat = (bottom + top) / 2
+            centers.append((center_lat, center_lon))
+    return centers

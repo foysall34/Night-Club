@@ -5,7 +5,7 @@ from . import views
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
-    UserRegistrationAPIView,
+    
     UserVerifyOTPAPIView,
     UserResendOTPAPIView,
     UserLoginAPIView,
@@ -23,7 +23,8 @@ urlpatterns = [
 #=============================================================================================
 
     path('clubowners/status/', get_all_clubowners_status, name='clubowners-status'),
-    path('owner/register/', OwnerRegisterView.as_view(), name='register'),
+    path("owner/register/", OwnerRegisterView.as_view(), name="owner-register"),
+    path("owner/approve/<int:owner_id>/", ApproveOwnerView.as_view(), name="owner-approve"),
     path('owner/verify-otp/', OwnerVerifyOTPView.as_view(), name='verify-otp'),
     path('owner/resend-otp/', OwnerResendOTPView.as_view(), name='resend-otp'),
     path('owner/log-in/', OwnerLoginView.as_view(), name='log-in'),
@@ -53,6 +54,10 @@ urlpatterns = [
     path('owner/vibes-choices/', VibesChoiceListAPIView.as_view(), name='vibes-choice-list'),
     path('owner/<int:owner_id>/events/', get_owner_events, name='get_owner_events'), # search by clubowner id 
     path('club/<int:club_id>/', club_detail_update, name='club_detail_update'), # edit club profile
+    path("analytics/attendance/", AttendanceAnalyticsView.as_view(), name="attendance-analytics"),
+    path("analytics/visitors/", OwnerTotalVisitorsView.as_view(), name="total-visitors"),
+    path("analytics/dashboard/overview/", OwnerDashboardOverviewView.as_view(), name="owner-dashboard-overview"),#final dashboard overview
+
  
  
     

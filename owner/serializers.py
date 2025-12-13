@@ -9,80 +9,62 @@ from django.core.files.base import ContentFile
 from django.conf import settings
 import os
 from .utils import get_geoapify_coordinates
-
-
-
-
 from rest_framework import serializers
 from django.core.files.base import ContentFile
 from django.conf import settings
 import os
 from .models import ClubOwner, ClubProfile
-from .utils import get_geoapify_coordinates
 
 
-class ClubOwnerRegistrationSerializer(serializers.Serializer):
-    full_name = serializers.CharField(required=True)
-    email = serializers.EmailField(required=True)
-    password = serializers.CharField(write_only=True, required=True)
-    phone_number = serializers.CharField(required=True)
-    venue_name = serializers.CharField(required=True)
-    venue_city = serializers.CharField(required=True)
-    proof_doc = serializers.FileField(required=True)
-    profile_image = serializers.FileField(required=True)
-    id_front_page = serializers.FileField(required=True)
-    id_back_page = serializers.FileField(required=True)
 
-    def validate_email(self, value):
-        if ClubOwner.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("your email exist . please press re-send otp.")
-        return value
+
+# serializers.py
+from rest_framework import serializers
+from .models import ClubOwner
+
+
+from rest_framework import serializers
+from .models import ClubOwner
+
+
+class ClubOwnerSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = ClubOwner
+        fields = [
+            "full_name",
+            "email",
+            "phone_number",
+            "venue_name",
+            "venue_address",
+            "password",
+            "latitude",
+            "longitude",
+            "proof_doc",
+            "profile_image",
+            "id_front_page",
+            "id_back_page",
+        ]
 
     def create(self, validated_data):
-        venue_city = validated_data["venue_city"]
-
-        # ===============================
-        # GEOAPIFY → GET LAT/LON
-        # ===============================
-        lat, lon = get_geoapify_coordinates(venue_city)
-        print("GEOAPIFY RESULT:", lat, lon)   # debug
-
-        if not lat:
-            raise serializers.ValidationError("Geoapify could not fetch lat/lon")
-
-        # ===============================
-        # CREATE OWNER
-        # ===============================
-        user = ClubOwner.objects.create_user(
-            email=validated_data["email"],
-            full_name=validated_data["full_name"],
-            password=validated_data["password"],
-            phone_number=validated_data["phone_number"],
-            venue_name=validated_data["venue_name"],
-            venue_city=venue_city,
-            profile_image=validated_data["profile_image"],
-            proof_doc=validated_data["proof_doc"],
-            id_front_page=validated_data["id_front_page"],
-            id_back_page=validated_data["id_back_page"],
-            latitude=lat,
-            longitude=lon
-        )
-
-        # ===============================
-        # CREATE/UPDATE ClubProfile
-        # ===============================
-        club = ClubProfile.objects.create(
-            owner=user,
-            venue_name=validated_data["venue_name"],
-            venue_city=venue_city,
-       
-            latitude=lat,
-            longitude=lon,
-            email=user.email,
-            phone=validated_data["phone_number"]
-        )
-
+        password = validated_data.pop("password")
+        user = ClubOwner(**validated_data)
+        user.set_password(password)   
+        user.is_active = False
+        user.save()
         return user
+
+
+
+
+
+
+
+
+
+
+
 
 
 

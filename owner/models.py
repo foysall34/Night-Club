@@ -3,9 +3,9 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.conf import settings
-from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from all_club.models import Club
 
 # ==============================================================================
 # PART 1: CLUB OWNER MODELS
@@ -49,10 +49,16 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=20)
     venue_name = models.CharField(max_length=255)
-    venue_city = models.CharField(max_length=100 , default='write city')
+    venue_address = models.CharField(max_length=100 , default='write address')
     
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    assigned_club = models.ForeignKey(Club,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="owners"
+    )
 
     # --- Verification Documents ---
     proof_doc = models.FileField(upload_to='proofs/images/' , default='upload file')
@@ -94,7 +100,7 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
     objects = ClubOwnerManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['full_name']
+    REQUIRED_FIELDS = []
 
     def __str__(self):
         return self.email
@@ -103,6 +109,66 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
         verbose_name = 'Club Owner'
         verbose_name_plural = 'Club Owners'
 
+
+
+
+
+class ClubType(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    def __str__(self):
+        return self.name
+
+class Vibes_Choice(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    def __str__(self):
+        return self.name
+
+def get_default_weekly_hours():
+    default_time = {"start_time": "10:00", "end_time": "18:00"}
+    return {
+        "monday": default_time,
+        "tuesday": default_time,
+        "wednesday": default_time,
+        "thursday": default_time,
+        "friday": default_time,
+        "saturday": default_time,
+        "sunday": default_time,
+    }
+
+
+
+
+
+class ClubProfile(models.Model):
+    owner = models.OneToOneField(ClubOwner, on_delete=models.CASCADE, related_name='club_profile', null=True)
+    venue_name = models.CharField(max_length=255 , default='club_name')
+    venue_address = models.CharField(max_length=100 , default='write address')
+    club_type = models.ManyToManyField(ClubType, blank=True)
+    vibes_type = models.ManyToManyField(Vibes_Choice, blank=True)
+    dressCode = models.CharField(max_length=255, blank=True)
+    about = models.TextField(max_length=5000 , default='write about')
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    ageRequirement = models.CharField(max_length=100, blank=True)
+    coverCharge = models.CharField(max_length=255, blank=True)
+    clubImageUrl = models.ImageField(upload_to='clubs/images/', max_length=500, blank=True, null=True)
+    features = models.JSONField(default=dict)
+    events = models.JSONField(default=dict)
+    crowd_atmosphere = models.JSONField(default=dict)
+    weekly_hours = models.JSONField(default=get_default_weekly_hours)
+    user_reviews = models.JSONField(default=list) 
+    click_count = models.PositiveIntegerField(default=0)
+    is_favourite = models.BooleanField(default=False)
+    is_hidden = models.BooleanField(default=False)
+    insta_link = models.CharField(max_length=2000 , default='insta link')
+    tiktok_link = models.CharField(max_length=2000 , default='tiktok link')
+    phone =models.IntegerField(null= True , blank= True)
+    email =models.CharField(null= True, blank=True)
+
+
+    def __str__(self):
+        return self.email or f"Unnamed Club (ID: {self.id})"
 # ==============================================================================
 # PART 2: NEW - REGULAR USER MODELS
 # ==============================================================================
@@ -299,62 +365,16 @@ class Follow(models.Model):
 # PART 3: CLUB AND EVENT MODELS
 # ==============================================================================
 
-class ClubType(models.Model):
-    name = models.CharField(max_length=50, unique=True)
 
-    def __str__(self):
-        return self.name
 
-class Vibes_Choice(models.Model):
-    name = models.CharField(max_length=50, unique=True)
-    def __str__(self):
-        return self.name
-
-def get_default_weekly_hours():
-    default_time = {"start_time": "10:00", "end_time": "18:00"}
-    return {
-        "monday": default_time,
-        "tuesday": default_time,
-        "wednesday": default_time,
-        "thursday": default_time,
-        "friday": default_time,
-        "saturday": default_time,
-        "sunday": default_time,
-    }
-
-class ClubProfile(models.Model):
-    owner = models.OneToOneField(ClubOwner, on_delete=models.CASCADE, related_name='club_profile', null=True)
-    venue_name = models.CharField(max_length=255 , default='club_name')
-    venue_city = models.CharField(max_length=100 , default='write city')
-    club_type = models.ManyToManyField(ClubType, blank=True)
-    vibes_type = models.ManyToManyField(Vibes_Choice, blank=True)
-    dressCode = models.CharField(max_length=255, blank=True)
-    about = models.TextField(max_length=5000 , default='write about')
-    latitude = models.FloatField(null=True, blank=True)
-    longitude = models.FloatField(null=True, blank=True)
-    ageRequirement = models.CharField(max_length=100, blank=True)
-    coverCharge = models.CharField(max_length=255, blank=True)
-    clubImageUrl = models.ImageField(upload_to='clubs/images/', max_length=500, blank=True, null=True)
-    features = models.JSONField(default=dict)
-    events = models.JSONField(default=dict)
-    crowd_atmosphere = models.JSONField(default=dict)
-    weekly_hours = models.JSONField(default=get_default_weekly_hours)
-    user_reviews = models.JSONField(default=list) 
-    click_count = models.PositiveIntegerField(default=0)
-    is_favourite = models.BooleanField(default=False)
-    is_hidden = models.BooleanField(default=False)
-    insta_link = models.CharField(max_length=2000 , default='insta link')
-    tiktok_link = models.CharField(max_length=2000 , default='tiktok link')
-    phone =models.IntegerField(null= True , blank= True)
-    email =models.CharField(null= True, blank=True)
-
-    def __str__(self):
-        return self.email or f"Unnamed Club (ID: {self.id})"
     
 
+class Attendance(models.Model):
+    club = models.ForeignKey(Club, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
-#  write Your review code here 
 
 
 class Event(models.Model):

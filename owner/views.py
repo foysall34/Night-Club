@@ -18,7 +18,7 @@ from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import ClubOwner
-from .serializers import ClubOwnerRegistrationSerializer, OwnerVerifyOTPSerializer
+from .serializers import  OwnerVerifyOTPSerializer
 from .utils import generate_otp, get_coordinates_from_city, send_otp_email
 import random
 from django.utils import timezone
@@ -29,7 +29,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import authenticate
 from .models import ClubOwner
-from .serializers import ClubOwnerRegistrationSerializer ,ClubOwnerStatusSerializer
+from .serializers import  ClubOwnerStatusSerializer
 
 
 
@@ -41,49 +41,124 @@ def get_all_clubowners_status(request):
 
 
 
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAdminUser
+from django.shortcuts import get_object_or_404
 
-class OwnerRegisterView(generics.CreateAPIView):
-    serializer_class = ClubOwnerRegistrationSerializer
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        print(serializer)
+from .models import ClubOwner
+from all_club.models import Club
+from .serializers import ClubOwnerSerializer
+from .utils import is_similar, generate_otp, send_approval_email, send_rejection_email
+
+class OwnerRegisterView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        data = request.data
+        venue_name = data.get("venue_name")
+
+        serializer = ClubOwnerSerializer(data=data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()     
-        otp = str(random.randint(1000, 9999))
-        user.otp = otp
-        user.otp_created_at = timezone.now()
-        user.save()
-        send_mail(
-            'Your OTP for registration',
-            f'Your OTP is: {otp}',
-            'from@example.com',
-            [user.email],
-            fail_silently=False,)
+
+        owner = serializer.save(
+            is_active=False,
+            verification_status="pending"
+        )
+
+        # 2) Find matching club
+        matched_club = None
+        for club in Club.objects.all():
+            if is_similar(venue_name, club.name, threshold=0.6):
+                matched_club = club
+                break
+
+        # 3) No match → Create new club
+        if not matched_club:
+            matched_club = Club.objects.create(
+                name=venue_name,
+                address=owner.venue_address,
+                lat=owner.latitude,
+                lng=owner.longitude,
+            )
+
+        # 4) Club → Owner data auto fill
+        owner.venue_name = matched_club.name
+        owner.venue_address = matched_club.address
+        owner.latitude = matched_club.lat
+        owner.longitude = matched_club.lng
+        owner.assigned_club = matched_club
+        owner.save()
+
         return Response(
-            {"message": "User registered successfully. Please check your email for OTP."},
-            status=status.HTTP_201_CREATED)
+            {"message": "Registration completed. Waiting for admin approval."},
+            status=201
+        )
+
+
+
+class ApproveOwnerView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, owner_id):
+        owner = get_object_or_404(ClubOwner, id=owner_id)
+        action = request.data.get("action")  
+
+        if action == "approve":
+            otp = generate_otp()
+            owner.verification_status = "approved"
+            owner.otp = otp
+            owner.otp_created_at = timezone.now()
+            owner.is_active = True
+            owner.save()
+
+            send_approval_email(owner.email, otp)
+
+            return Response({"message": "Owner approved and OTP sent."})
+
+        elif action == "reject":
+            owner.verification_status = "rejected"
+            owner.save()
+
+            send_rejection_email(owner.email)
+
+            return Response({"message": "Owner rejected and email sent."})
+
+        return Response({"error": "Invalid action"}, status=400)
+
 
 
 
 
 class OwnerVerifyOTPView(APIView):
-    def post(self, request, *args, **kwargs):
-        email = request.data.get('email')
-        otp = request.data.get('otp')
+    def post(self, request):
+        email = request.data.get("email")
+        otp = request.data.get("otp")
 
-        try:
-            user = ClubOwner.objects.get(email=email)
-        except ClubOwner.DoesNotExist:
-            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        user = get_object_or_404(ClubOwner, email=email)
 
-        if user.otp == otp and timezone.now() - user.otp_created_at < timedelta(minutes=5):
+        if (
+            user.otp == otp and
+            user.otp_created_at and
+            timezone.now() - user.otp_created_at < timedelta(minutes=5)
+        ):
             user.is_active = True
             user.otp = None
             user.otp_created_at = None
             user.save()
-            return Response({"message": "OTP verified and user activated."}, status=status.HTTP_200_OK)
-        else:
-            return Response({"error": "Invalid or expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response(
+                {"message": "OTP verified. Account activated."},
+                status=200
+            )
+
+        return Response({"error": "Invalid or expired OTP"}, status=400)
+
+
+
+
+
 
 class OwnerResendOTPView(APIView):
     """
@@ -112,41 +187,61 @@ class OwnerResendOTPView(APIView):
 
         return Response({"message": "New OTP has been sent to your email."}, status=status.HTTP_200_OK)
 
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
+from owner.models import ClubOwner
+
+
 class OwnerLoginView(APIView):
     """
-    View for Club Owner login.
+    Manual login for ClubOwner (bypasses Django auth)
     """
-    def post(self, request, *args, **kwargs):
-        email = request.data.get('email')
-        password = request.data.get('password')
+
+    def post(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
 
         if not email or not password:
             return Response(
-                {"error": "Email and password are required."},
+                {"error": "Email and password are required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        user = authenticate(username=email, password=password)
 
-        if user is not None:
-            if not user.is_active:
-                return Response(
-                    {"error": "This account is not active. Please verify your OTP."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+        owner = ClubOwner.objects.filter(email=email).first()
 
-            refresh = RefreshToken.for_user(user)
-
-            return Response({
-                "message": "Login successful.",
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-                "email": user.email
-            }, status=status.HTTP_200_OK)
-        else:
+        if not owner:
             return Response(
-                {"error": "Invalid credentials."},
+                {"error": "Invalid credentials"},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+
+        if not owner.check_password(password):
+            return Response(
+                {"error": "Invalid credentials"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if not owner.is_active:
+            return Response(
+                {"error": "Account not active. Verify OTP."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 🔥 Manually issue JWT
+        refresh = RefreshToken.for_user(owner)
+
+        return Response({
+            "message": "Login successful",
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "email": owner.email
+        }, status=status.HTTP_200_OK)
+
+
+
 
 class OwnerForgotPasswordView(APIView):
     """
@@ -3016,3 +3111,184 @@ class NYCNightclubsAPIView(APIView):
                 {"detail": "Internal error", "error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+
+
+
+
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.utils.timezone import now
+from django.db.models import Count
+from django.db.models.functions import TruncDate
+from datetime import timedelta
+
+from .models import Attendance
+
+
+import random
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.utils.timezone import now
+from datetime import timedelta
+
+
+class AttendanceAnalyticsView(APIView):
+    def get(self, request):
+        days = 7
+
+        labels = []
+        data = []
+
+        base = random.randint(5, 15)  # starting point
+
+        for i in range(days):
+            day = now().date() - timedelta(days=days - 1 - i)
+            labels.append(day.strftime("%a"))
+
+            # gradual random increase/decrease
+            base += random.randint(-3, 8)
+            base = max(base, 0)  # never negative
+            data.append(base)
+
+        return Response({
+            "labels": labels,
+            "data": data
+        })
+
+
+
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import Attendance
+
+
+class OwnerTotalVisitorsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        owner = request.user
+
+        if not hasattr(owner, "assigned_club") or owner.assigned_club is None:
+            return Response(
+                {"error": "No club assigned to this owner"},
+                status=400
+            )
+
+        club = owner.assigned_club
+        total_visitors = Attendance.objects.filter(club=club).count()
+
+        return Response({
+            "club": club.name,
+            "total_visitors": total_visitors
+        })
+
+
+
+
+
+# analytical dashboard 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.utils.timezone import now
+from datetime import timedelta
+from django.db.models import Avg
+
+from .models import Event, Attendance, ClubOwner, ClubProfile
+
+
+class OwnerDashboardOverviewView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        owner = request.user
+
+        if not owner.assigned_club:
+            return Response(
+                {"error": "No club assigned to this owner"},
+                status=400
+            )
+
+        club = owner.assigned_club
+        club_profile = owner.club_profile
+
+        today = now().date()
+
+        # ---------------- Events this month ----------------
+        this_month_start = today.replace(day=1)
+        last_month_end = this_month_start - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+
+        events_this_month = Event.objects.filter(
+            club=club_profile,
+            created_at__date__gte=this_month_start
+        ).count()
+
+        events_last_month = Event.objects.filter(
+            club=club_profile,
+            created_at__date__range=(last_month_start, last_month_end)
+        ).count()
+
+        event_diff = events_this_month - events_last_month
+        event_comparison = (
+            f"{event_diff} more than last month"
+            if event_diff >= 0
+            else f"{abs(event_diff)} less than last month"
+        )
+
+        # ---------------- Live Event ----------------
+        live_event = Event.objects.filter(
+            club=club_profile,
+            status="live"
+        ).first()
+
+        live_event_data = None
+        if live_event:
+            live_event_data = {
+                "title": live_event.name,
+                "viewers": live_event.views
+            }
+
+        # ---------------- Reviews (from JSONField) ----------------
+        reviews = club_profile.user_reviews or []
+
+        total_reviews = len(reviews)
+        week_start = today - timedelta(days=7)
+
+        weekly_reviews = [
+            r for r in reviews
+            if "created_at" in r and
+            now().date() - timedelta(days=7) <= now().date()
+        ]
+
+        avg_rating = (
+            sum(r.get("rating", 0) for r in reviews) / total_reviews
+            if total_reviews > 0 else 0
+        )
+
+        # ---------------- Total Views ----------------
+        total_views = Attendance.objects.filter(
+            club=club
+        ).count()
+
+        return Response({
+            "events_this_month": {
+                "value": events_this_month,
+                "comparison": event_comparison
+            },
+            "live_events": live_event_data,
+            "reviews": {
+                "rating": round(avg_rating, 1),
+                "count": len(weekly_reviews),
+                "period": "this week"
+            },
+            "total_views": {
+                "views": total_views,
+                "comparison": "vs last month"
+            }
+        })

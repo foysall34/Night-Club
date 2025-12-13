@@ -42,7 +42,18 @@ INSTALLED_APPS = [
     'rest_framework',
 ]
 
+
+
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://tripersonal-homelessly-felecia.ngrok-free.app",
+ 
+]
+
+
+
 MIDDLEWARE = [
+        
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -95,6 +106,8 @@ AUTH_USER_MODEL = 'owner.User'
 AUTHENTICATION_BACKENDS = [
     'owner.backends.EmailBackend', 
 ]
+
+
 
 
 

@@ -170,3 +170,42 @@ def split_bbox_to_centers(bbox, rows=3, cols=3):
             center_lat = (bottom + top) / 2
             centers.append((center_lat, center_lon))
     return centers
+
+
+
+# utils.py
+from difflib import SequenceMatcher
+import random
+from django.core.mail import send_mail
+from django.utils import timezone
+
+
+def is_similar(a, b, threshold=0.6):
+    """Check similarity between two strings."""
+    if not a or not b:
+        return False
+    similarity = SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    return similarity >= threshold
+
+
+def generate_otp():
+    """Generate a 4-digit OTP"""
+    return str(random.randint(1000, 9999))
+
+
+def send_approval_email(email, otp):
+    send_mail(
+        subject="Congratulations! Your nightclub registration has been approved. You can now log in to your account. Please note that the OTP will expire in 2 minutes.",
+        message=f"Your account is approved. Your OTP is: {otp}",
+        from_email="no-reply@clubapp.com",
+        recipient_list=[email],
+    )
+
+
+def send_rejection_email(email):
+    send_mail(
+        subject="Your Account Has Been Rejected",
+        message="Unfortunately, your registration request was rejected.",
+        from_email="no-reply@clubapp.com",
+        recipient_list=[email],
+    )

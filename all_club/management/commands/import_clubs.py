@@ -1,52 +1,33 @@
-import json
-import math
 from django.core.management.base import BaseCommand
 from all_club.models import Club
+from all_club.utils import get_lat_lng_from_address
 
 class Command(BaseCommand):
-    help = "Import clubs from clubview_merged.json"
+    help = "Update missing latitude and longitude for clubs based on their address"
 
     def handle(self, *args, **kwargs):
-        with open("clubview_merged.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
+        clubs = Club.objects.filter(lat__isnull=True) | Club.objects.filter(lng__isnull=True)
 
-        count = 0
+        if not clubs.exists():
+            self.stdout.write(self.style.SUCCESS("All clubs already have latitude & longitude."))
+            return
 
-        for item in data:
-            # Convert NaN → None
-            for k, v in item.items():
-                if isinstance(v, float) and math.isnan(v):
-                    item[k] = None
+        updated_count = 0
 
-            Club.objects.create(
-                name=item.get("name"),
-                address=item.get("address"),
-                categories=item.get("categories"),
-                category_ids=item.get("category_ids"),
-                city=item.get("city"),
-                description=item.get("description"),
-                distance=item.get("distance"),
-                foursquare_id=item.get("foursquare_id"),
-                hours=item.get("hours"),
-                instagram_url=item.get("instagram_url"),
-                is_nightlife=item.get("is_nightlife"),
-                last_fsq_refresh=item.get("last_fsq_refresh"),
-                lat=item.get("lat"),
-                lng=item.get("lng"),
-                place_id=item.get("place_id"),
-                popularity=item.get("popularity"),
-                price_level=item.get("price_level"),
-                rating=item.get("rating"),
-                social_media=item.get("social_media"),
-                state=item.get("state"),
-                summary=item.get("summary"),
-                tips=item.get("tips"),
-                types=item.get("types"),
-                website=item.get("website"),
-                lat_1=item.get("lat.1"),
-                lng_1=item.get("lng.1"),
-            )
+        for club in clubs:
+            if not club.address:
+                self.stdout.write(self.style.WARNING(f"Skipping '{club.name}' (no address)."))
+                continue
 
-            count += 1
+            lat, lng = get_lat_lng_from_address(club.address)
 
-        self.stdout.write(self.style.SUCCESS(f"Successfully imported {count} clubs!"))
+            if lat and lng:
+                club.lat = lat
+                club.lng = lng
+                club.save(update_fields=["lat", "lng"])
+                updated_count += 1
+                self.stdout.write(self.style.SUCCESS(f"Updated: {club.name} → ({lat}, {lng})"))
+            else:
+                self.stdout.write(self.style.ERROR(f"Failed to fetch location for: {club.name}"))
+
+        self.stdout.write(self.style.SUCCESS(f"\nTotal updated clubs: {updated_count}"))

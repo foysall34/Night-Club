@@ -1,4 +1,5 @@
 # accounts/serializers.py
+from datetime import timedelta
 from rest_framework import serializers
 from geopy.geocoders import Nominatim 
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable 
@@ -17,7 +18,6 @@ from .models import ClubOwner, ClubProfile
 
 
 
-
 # serializers.py
 from rest_framework import serializers
 from .models import ClubOwner
@@ -27,34 +27,47 @@ from rest_framework import serializers
 from .models import ClubOwner
 
 
-class ClubOwnerSerializer(serializers.ModelSerializer):
+# accounts/serializers.py
+from rest_framework import serializers
+from .models import ClubOwner
+
+class OwnerRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
 
     class Meta:
         model = ClubOwner
-        fields = [
+        fields = (
             "full_name",
             "email",
             "phone_number",
             "venue_name",
             "venue_address",
-            "password",
             "latitude",
+            "password",
             "longitude",
             "proof_doc",
             "profile_image",
             "id_front_page",
             "id_back_page",
-        ]
+        )
 
     def create(self, validated_data):
+        email = validated_data.pop("email") 
         password = validated_data.pop("password")
-        user = ClubOwner(**validated_data)
-        user.set_password(password)   
-        user.is_active = False
-        user.save()
-        return user
 
+
+        owner = ClubOwner.objects.create_user(
+            email=email,
+
+            password=password, 
+            **validated_data
+        )
+
+        owner.is_active = False
+        owner.verification_status = "pending"
+        owner.save(update_fields=["is_active", "verification_status"])
+
+        return owner
 
 
 
@@ -77,19 +90,64 @@ class ClubOwnerStatusSerializer(serializers.ModelSerializer):
 
 
 
-class OwnerVerifyOTPSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=True)
-    otp = serializers.CharField(required=True, max_length=4)
+class OwnerOTPVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=4)
+
+    def validate(self, data):
+        try:
+            owner = ClubOwner.objects.get(email=data["email"])
+        except ClubOwner.DoesNotExist:
+            raise serializers.ValidationError("Invalid email")
+
+        if owner.otp != data["otp"]:
+            raise serializers.ValidationError("Invalid OTP")
+
+        # OTP expiry: 5 minutes
+        from django.utils import timezone
+        if timezone.now() - owner.otp_created_at > timedelta(minutes=5):
+            raise serializers.ValidationError("OTP expired")
+
+        data["owner"] = owner
+        return data
+
 
 class ResendOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 
 
+from rest_framework import serializers
+from django.contrib.auth import authenticate
+from .models import ClubOwner
 
-class  LoginSerializer(serializers.Serializer):
+
+class OwnerLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        user = authenticate(
+            email=data["email"],
+            password=data["password"]
+        )
+
+        if not user:
+            raise serializers.ValidationError("Invalid credentials")
+
+        if user.verification_status != "approved":
+            raise serializers.ValidationError(
+                "Your account is not approved by admin yet"
+            )
+
+        if not user.is_active:
+            raise serializers.ValidationError(
+                "Your account is inactive"
+            )
+
+        data["user"] = user
+        return data
+
 
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()

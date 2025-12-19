@@ -1,5 +1,67 @@
 # utils.py
 
+
+
+
+
+
+# accounts/utils.py
+import random
+from django.utils import timezone
+from datetime import timedelta
+from django.core.mail import send_mail
+from django.conf import settings
+
+
+def generate_and_send_otp(owner):
+    otp = str(random.randint(1000, 9999))
+
+    owner.otp = otp
+    owner.otp_created_at = timezone.now()
+    owner.save(update_fields=["otp", "otp_created_at"])
+
+    send_mail(
+        subject="Your OTP Verification Code",
+        message=f"Your OTP is {otp}. It will expire in 5 minutes.",
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[owner.email],
+        fail_silently=False,
+    )
+
+
+
+
+
+
+# owner/jwt_utils.py
+import jwt
+from datetime import timedelta
+from django.conf import settings
+from django.utils import timezone
+
+
+def generate_owner_jwt(owner):
+    payload = {
+        "owner_id": owner.id,
+        "email": owner.email,
+        "role": "club_owner",
+        "iat": timezone.now(),
+        "exp": timezone.now() + timedelta(hours=1),
+    }
+
+    return jwt.encode(
+        payload,
+        settings.SECRET_KEY,
+        algorithm="HS256"
+    )
+
+
+
+
+
+
+
+
 import random
 from django.core.mail import send_mail
 from django.conf import settings
@@ -196,7 +258,7 @@ def generate_otp():
 def send_approval_email(email, otp):
     send_mail(
         subject="Congratulations! Your nightclub registration has been approved. You can now log in to your account. Please note that the OTP will expire in 2 minutes.",
-        message=f"Your account is approved. Your OTP is: {otp}",
+        message=f"Your account is approved. ",
         from_email="no-reply@clubapp.com",
         recipient_list=[email],
     )
@@ -209,3 +271,43 @@ def send_rejection_email(email):
         from_email="no-reply@clubapp.com",
         recipient_list=[email],
     )
+
+
+
+
+
+
+
+import jwt
+from datetime import timedelta
+from django.conf import settings
+from django.utils import timezone
+
+
+ACCESS_TOKEN_MINUTES = 420
+REFRESH_TOKEN_DAYS = 7
+
+
+def generate_owner_access_token(owner):
+    payload = {
+        "owner_id": owner.id,
+        "email": owner.email,
+        "role": "club_owner",
+        "type": "access",
+        "iat": timezone.now(),
+        "exp": timezone.now() + timedelta(minutes=ACCESS_TOKEN_MINUTES),
+    }
+
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
+
+def generate_owner_refresh_token(owner):
+    payload = {
+        "owner_id": owner.id,
+        "role": "club_owner",
+        "type": "refresh",
+        "iat": timezone.now(),
+        "exp": timezone.now() + timedelta(days=REFRESH_TOKEN_DAYS),
+    }
+
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")

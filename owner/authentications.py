@@ -3,6 +3,15 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import ClubOwner  # Import your ClubOwner model
 
+
+
+
+
+
+
+
+
+
 class ClubOwnerAuthentication(JWTAuthentication):
     """
     Custom authentication class for ClubOwner users.
@@ -22,3 +31,5 @@ class ClubOwnerAuthentication(JWTAuthentication):
             return None # User does not exist
 
         return user
+    
+

@@ -30,13 +30,27 @@ class Club(models.Model):
     types = models.TextField(null=True, blank=True)
     website = models.URLField(null=True, blank=True)
     photo_url = models.URLField(null=True, blank=True)
+    name_normalized = models.CharField(
+        max_length=255,
+        unique=True,
+        db_index=True , null=True, blank=True
+    )
 
     # Extra lat/lng fields
     lat_1 = models.FloatField(null=True, blank=True)
     lng_1 = models.FloatField(null=True, blank=True)
 
 
+    
 
+    def save(self, *args, **kwargs):
+        if self.name:
+            self.name_normalized = (
+                self.name.strip().lower()
+                .replace(" ", "")
+                .replace("-", "")
+            )
+        super().save(*args, **kwargs)
 
     def save(self, *args, **kwargs):
         # If address exists and lat/lng empty → fetch from API

@@ -7,3 +7,13 @@ class OwnerConfig(AppConfig):
 
     def ready(self):
         import owner.signals
+
+
+
+
+
+
+
+
+
+

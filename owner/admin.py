@@ -47,53 +47,43 @@ from .models import ClubOwner
 
 
 
+# owner/admin.py
+from django.contrib import admin
+from .models import ClubOwner
+
+
 @admin.register(ClubOwner)
-class ClubOwnerAdmin(UserAdmin):
-    model = ClubOwner
-
-    ordering = ("email",)
-    list_display = (  'id' , "email", "verification_status", "is_active")
-
-    fieldsets = (
-        (None, {"fields": ("email", "password")}),
-        ("Personal info", {
-            "fields": (
-                "full_name",
-                "phone_number",
-                "venue_name",
-                "venue_address",
-                "latitude",
-                "longitude",
-                "proof_doc",    
-
-            )
-        }),
-        ("Status", {
-            "fields": (
-                "verification_status",
-                "is_active",
-                "assigned_club",
-            )
-        }),
-        ("Permissions", {
-            "fields": (
-                "is_staff",
-                "is_superuser",
-                "groups",
-                "user_permissions",
-            )
-        }),
+class ClubOwnerAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        "email",
+        "venue_name",
+        "full_name",
+        "verification_status",
+        "is_active",
+        "date_joined",
     )
 
-    add_fieldsets = (
-        (None, {
-            "classes": ("wide",),
-            "fields": ("email", "password1", "password2"),
-        }),
-    )
+    list_filter = ("verification_status", "is_active")
+    search_fields = ("email", "full_name", "venue_name")
 
-    search_fields = ("email",)
+    actions = ["approve_owner", "reject_owner"]
 
+    def approve_owner(self, request, queryset):
+        queryset.update(
+            verification_status="approved",
+            is_active=True
+        )
+
+    approve_owner.short_description = "✅ Approve selected owners"
+
+    def reject_owner(self, request, queryset):
+        queryset.update(
+            verification_status="rejected",
+            is_active=False
+        )
+
+    reject_owner.short_description = "❌ Reject selected owners"
 
   
 

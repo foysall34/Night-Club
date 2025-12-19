@@ -33,7 +33,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # app 
     'myapp' ,
-    'owner',
+    'owner.apps.OwnerConfig',
     'subscriptions',
     'all_club',
   
@@ -79,6 +79,7 @@ import os
 STRIPE_API_KEY = config("STRIPE_API_KEY")
 STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET")
 GOOGLE_API_KEY = config("GOOGLE_API_KEY")
+OPENAI_API_KEY = config("OPENAI_API_KEY")
 
 # settings.py
 GEOAPIFY_API_KEY = config("GEOAPIFY_API_KEY")
@@ -149,7 +150,7 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
-    "https://category-pose-donations-plants.trycloudflare.com"
+    "https://tripersonal-homelessly-felecia.ngrok-free.app"
 ]
 
 

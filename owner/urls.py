@@ -1,4 +1,3 @@
-# accounts/urls.py
 from django.urls import path
 from .views import *
 from . import views
@@ -24,10 +23,9 @@ urlpatterns = [
 
     path('clubowners/status/', get_all_clubowners_status, name='clubowners-status'),
     path("owner/register/", OwnerRegisterView.as_view(), name="owner-register"),
-    path("owner/approve/<int:owner_id>/", ApproveOwnerView.as_view(), name="owner-approve"),
-    path('owner/verify-otp/', OwnerVerifyOTPView.as_view(), name='verify-otp'),
+    path('owner/verify-otp/', OwnerOTPVerifyView.as_view(), name='verify-otp'),
     path('owner/resend-otp/', OwnerResendOTPView.as_view(), name='resend-otp'),
-    path('owner/log-in/', OwnerLoginView.as_view(), name='log-in'),
+    path('owner/log-in/', ClubOwnerLoginView.as_view(), name='log-in'),
     path('owner/forgot-password/', OwnerForgotPasswordView.as_view(), name='forgot-password'),
     path('owner/reset-password/', OwnerPasswordResetView.as_view(), name='owner-reset-password'),
     # path('owner/change-password/', OwnerChangePasswordView.as_view(), name='change-password'),
@@ -47,18 +45,18 @@ urlpatterns = [
     path('events/<int:event_id>/', EventDetailView.as_view(), name='event-detail'),
    #live , this month event , total views
 
-    path('owner/dashborad-status/', DashboardStatsView.as_view(), name='club-detail'),
+    path('owner/dashborad-status/', OwnerDashboardOverviewView.as_view(), name='club-detail'),
     path('owner/anlytical-dashborad-status/', AnalyticalDashboard.as_view(), name='club-'),
 
     path('owner/club-types/', ClubTypeListAPIView.as_view(), name='club-type-list'),
     path('owner/vibes-choices/', VibesChoiceListAPIView.as_view(), name='vibes-choice-list'),
     path('owner/<int:owner_id>/events/', get_owner_events, name='get_owner_events'), # search by clubowner id 
-    path('club/<int:club_id>/', club_detail_update, name='club_detail_update'), # edit club profile
+    path('club/', club_detail_update, name='club_detail_update'), # edit club profile  *************8
     path("analytics/attendance/", AttendanceAnalyticsView.as_view(), name="attendance-analytics"),
     path("analytics/visitors/", OwnerTotalVisitorsView.as_view(), name="total-visitors"),
     path("analytics/dashboard/overview/", OwnerDashboardOverviewView.as_view(), name="owner-dashboard-overview"),#final dashboard overview
+    path("dashboard/event-attendance/",EventAttendanceChartView.as_view(),name="event-attendance-chart"), # for analytical dashboard 
 
- 
  
     
 

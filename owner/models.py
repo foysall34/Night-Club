@@ -96,7 +96,7 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
         related_query_name="club_owner",
     )
 
-    # --- Manager and Required Settings ---
+  
     objects = ClubOwnerManager()
 
     USERNAME_FIELD = 'email'
@@ -108,8 +108,6 @@ class ClubOwner(AbstractBaseUser, PermissionsMixin):
     class Meta:
         verbose_name = 'Club Owner'
         verbose_name_plural = 'Club Owners'
-
-
 
 
 
@@ -249,6 +247,26 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         verbose_name = 'User'
         verbose_name_plural = 'Users'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class MusicGenre(models.Model):
@@ -471,3 +489,11 @@ class Nightclub(models.Model):
 
     def __str__(self):
         return self.name or self.place_id
+
+
+
+
+
+
+
+

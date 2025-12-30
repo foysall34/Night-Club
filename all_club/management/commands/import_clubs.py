@@ -1,53 +1,59 @@
 from django.core.management.base import BaseCommand
 from all_club.models import Club
-from all_club.utils import get_lat_lng_from_address
+from all_club.services.club_ai import enrich_club_with_ai
+from all_club.services.club_type_detector import (
+    detect_from_categories,
+    detect_from_hours
+)
 
 
 class Command(BaseCommand):
-    help = "Update missing latitude and longitude for clubs using OpenAI geocoding"
+    help = "Detect club_type using categories → hours → OpenAI fallback"
 
     def handle(self, *args, **kwargs):
-        clubs = Club.objects.filter(lat__isnull=True) | Club.objects.filter(lng__isnull=True)
-
-        if not clubs.exists():
-            self.stdout.write(
-                self.style.SUCCESS("All clubs already have latitude & longitude.")
-            )
-            return
-
-        updated_count = 0
+        clubs = Club.objects.all()
 
         for club in clubs:
-            self.stdout.write(f"\n📍 Processing club: {club.name}")
+            try:
+                self.stdout.write(f"\n🔍 Processing: {club.name}")
 
-            if not club.address:
-                self.stdout.write(
-                    self.style.WARNING("⚠ Skipping (no address).")
-                )
-                continue
+                club_type = None
 
-            lat, lng = get_lat_lng_from_address(club.address)
+                # -------------------------
+                # 1️⃣ Categories based
+                # -------------------------
+                club_type = detect_from_categories(club.categories)
+                if club_type:
+                    self.stdout.write(f"✔ From categories: {club_type}")
 
-            if lat and lng:
-                club.lat = lat
-                club.lng = lng
-                club.save(update_fields=["lat", "lng"])
-                updated_count += 1
+                # -------------------------
+                # 2️⃣ Hours based fallback
+                # -------------------------
+                if not club_type:
+                    club_type = detect_from_hours(club.hours)
+                    if club_type:
+                        self.stdout.write(f"✔ From hours: {club_type}")
+
+                # -------------------------
+                # 3️⃣ OpenAI fallback (last)
+                # -------------------------
+                if not club_type:
+                    self.stdout.write("🤖 Using OpenAI fallback")
+                    ai_data = enrich_club_with_ai(club)
+                    club_type = ai_data.get("club_type", "Mixed")
+
+                club.club_type = [club_type]
+                club.save(update_fields=["club_type"])
 
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"✅ Updated → ({lat}, {lng})"
-                    )
-                )
-            else:
-                self.stdout.write(
-                    self.style.ERROR(
-                        "❌ Failed to fetch location from OpenAI"
+                        f"✅ Final club_type: {club.club_type}"
                     )
                 )
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"\n🎉 Total updated clubs: {updated_count}"
-            )
-        )
+            except Exception as e:
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"❌ Failed {club.name}: {str(e)}"
+                    )
+                )

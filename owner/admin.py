@@ -14,7 +14,14 @@ admin.site.register(Vibes_Choice)
 admin.site.register(LegalContent)
 
 # admin.site.register(ClubProfile)
-admin.site.register(UserProfile)
+# admin.site.register(UserProfile)
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+
+    list_display = ( 'id' ,  'user',)
+
+
 
 
 @admin.register(MusicGenre)
@@ -75,7 +82,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
             is_active=True
         )
 
-    approve_owner.short_description = "✅ Approve selected owners"
+    approve_owner.short_description = " Approve selected owners"
 
     def reject_owner(self, request, queryset):
         queryset.update(
@@ -83,7 +90,7 @@ class ClubOwnerAdmin(admin.ModelAdmin):
             is_active=False
         )
 
-    reject_owner.short_description = "❌ Reject selected owners"
+    reject_owner.short_description = " Reject selected owners"
 
   
 

@@ -163,6 +163,8 @@ class ClubProfile(models.Model):
     tiktok_link = models.CharField(max_length=2000 , default='tiktok link')
     phone =models.IntegerField(null= True , blank= True)
     email =models.CharField(null= True, blank=True)
+    views = models.PositiveIntegerField(default=0)
+
 
 
     def __str__(self):
@@ -323,7 +325,7 @@ class UserProfile(models.Model):
         blank=True, 
         null=True
     )
-    city = models.CharField(max_length=200 , default='write city')
+    city = models.CharField(max_length=200 , null= True , blank= True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     about = models.TextField(max_length=2000 , null= True , blank= True)
@@ -388,8 +390,9 @@ class Follow(models.Model):
     
 
 class Attendance(models.Model):
-    club = models.ForeignKey(Club, on_delete=models.CASCADE)
+    club = models.ForeignKey(Club, on_delete=models.CASCADE  , blank=True , null=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    checked_in = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -409,7 +412,9 @@ class Event(models.Model):
     time = models.TimeField()
     entry_fee = models.CharField(max_length=100, blank=True, help_text="e.g., $20 or Free")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
-    
+    start_date = models.DateTimeField(default=timezone.now)
+    end_date = models.DateTimeField(default=timezone.now)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     views = models.PositiveIntegerField(default=0)

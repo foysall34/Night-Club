@@ -43,6 +43,30 @@ def get_lat_lng_from_address(address):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 from openai import OpenAI
 from django.conf import settings
 import json

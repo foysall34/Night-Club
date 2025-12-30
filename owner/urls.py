@@ -29,17 +29,13 @@ urlpatterns = [
     path('owner/forgot-password/', OwnerForgotPasswordView.as_view(), name='forgot-password'),
     path('owner/reset-password/', OwnerPasswordResetView.as_view(), name='owner-reset-password'),
     # path('owner/change-password/', OwnerChangePasswordView.as_view(), name='change-password'),
-
 # -----------------------   CLUB OWNER DETAILS API  -----------------
     path('owner/club-profile/', ClubProfileByEmailView.as_view(), name='club-profile-by-email'),
     path('events/by-owner-email/', EventsByOwnerEmailView.as_view(), name='events-by-owner-email'),
 
     path('owner/legal-content/<slug:type_slug>/', LegalContentView.as_view(), name='legal-content'),
     path('owner/club-profile/weekly-hours/', WeeklyHoursAPIView.as_view(), name='club-profile-weekly-hours'),
-    # path('owner/events/', EventListCreateAPIView.as_view(), name='event-list-create'),
-
-
-  
+    # path('owner/events/', EventListCreateAPIView.as_view(), name='event-list-create'),  
     path('club-recomend-info/<int:pk>/', ClubDetailView.as_view(), name='club-detail'),
     path("events/summary/", EventSummaryByOwnerEmailView.as_view()),
     path('events/<int:event_id>/', EventDetailView.as_view(), name='event-detail'),
@@ -56,12 +52,9 @@ urlpatterns = [
     path("analytics/visitors/", OwnerTotalVisitorsView.as_view(), name="total-visitors"),
     path("analytics/dashboard/overview/", OwnerDashboardOverviewView.as_view(), name="owner-dashboard-overview"),#final dashboard overview
     path("dashboard/event-attendance/",EventAttendanceChartView.as_view(),name="event-attendance-chart"), # for analytical dashboard 
-
- 
-    
-
-
     # path('owner/clubs/<int:club_id>/reviews/', ClubReviewListCreateView.as_view(), name='club-reviews'),
+    path("dashboard/check-in/", DashboardAnalyticsView.as_view()), # check-in 
+
 
 
 
@@ -130,22 +123,7 @@ urlpatterns = [
 
 
 
+
+
  #all usr details
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ]

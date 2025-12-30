@@ -611,7 +611,7 @@ from .models import ClubProfile, ClubOwner
 class ClubDetailSerializer(serializers.ModelSerializer):
     club_id = serializers.IntegerField(source='id', read_only=True)
     full_name = serializers.CharField(source='owner.full_name', read_only=True)
-    venue_city = serializers.CharField(source='owner.venue_city', read_only=True)
+    venue_address = serializers.CharField(source='owner.venue_address', read_only=True)
     latitude = serializers.FloatField(source='owner.latitude', read_only=True)
     longitude = serializers.FloatField(source='owner.longitude', read_only=True)
     practical_info = serializers.JSONField(source='practicalInfo', read_only=True)
@@ -624,7 +624,7 @@ class ClubDetailSerializer(serializers.ModelSerializer):
         fields = [
             'club_id',
             'full_name',
-            'venue_city',
+            'venue_address',
             'latitude',
             'longitude',
             'features',
@@ -636,11 +636,20 @@ class ClubDetailSerializer(serializers.ModelSerializer):
 
 from rest_framework import serializers
 from .models import UserProfile
+
+CITY_LOCATION_MAP = {
+   "new york": {"lat": 40.7128, "lng": -74.0060},
+    "los angeles": {"lat": 34.0522, "lng": -118.2437},
+    "san francisco": {"lat": 37.7749, "lng": -122.4194},
+    "scottsdale": {"lat": 33.4942, "lng": -111.9261},
+}
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
-    user_name = serializers.EmailField(source='user.full_name', read_only=True)
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
     user_img = serializers.ImageField(read_only=True)
-    
+
     music_preferences = serializers.SlugRelatedField(
         many=True, slug_field='name', read_only=True
     )
@@ -656,7 +665,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'user_email',
-            'user_name' , 
+            'user_name',
             'user_img',
             'city',
             'latitude',
@@ -671,7 +680,40 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'followers',
             'created_at'
         ]
+        extra_kwargs = {
+            'city': {
+                'required': False,
+                'allow_null': True,
+                'allow_blank': True
+            },
+            'latitude': {'required': False, 'allow_null': True},
+            'longitude': {'required': False, 'allow_null': True},
+        }
 
+    def validate(self, attrs):
+        city = attrs.get("city")
+        lat = attrs.get("latitude")
+        lng = attrs.get("longitude")
+
+        if city and (lat is None or lng is None):
+            key = city.strip().lower()
+            location = CITY_LOCATION_MAP.get(key)
+
+            if location:
+                attrs["latitude"] = location["lat"]
+                attrs["longitude"] = location["lng"]
+            else:
+                raise serializers.ValidationError({
+                    "city": "Unknown city. Cannot auto-detect location."
+                })
+
+   
+        if (lat is not None and lng is None) or (lat is None and lng is not None):
+            raise serializers.ValidationError(
+                "Both latitude and longitude must be provided together."
+            )
+
+        return attrs
 
 
 class ClubProfileSerializered(serializers.ModelSerializer):
@@ -682,7 +724,7 @@ class ClubProfileSerializered(serializers.ModelSerializer):
         fields = [
             'id',
             'venue_name',
-            'venue_city',
+            'venue_address',
             'click_count',
             'owner_email',
         ]

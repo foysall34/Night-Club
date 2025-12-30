@@ -8,7 +8,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('myapp/' ,  include('myapp.urls')), 
     path('auth/', include('owner.urls')),
-    path('stripe/' ,include('subscriptions.urls') )
+    path('stripe/' ,include('subscriptions.urls') ),
+    path('clubs/' , include('all_club.urls')),
 
 ]
 if settings.DEBUG:

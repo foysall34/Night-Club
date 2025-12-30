@@ -25,6 +25,7 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
+  
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -32,12 +33,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # app 
+   'all_club',
     'myapp' ,
     'owner.apps.OwnerConfig',
     'subscriptions',
-    'all_club',
-  
-
+    
     # framework 
     'rest_framework',
 ]

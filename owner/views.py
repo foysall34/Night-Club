@@ -1538,39 +1538,82 @@ from datetime import datetime
 from django.core.files.storage import FileSystemStorage 
 
 
-@api_view(['GET', 'POST', 'PATCH'])
+from rest_framework.decorators import api_view, permission_classes, parser_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
+
+from django.core.files.storage import FileSystemStorage
+from django.utils import timezone
+
+from datetime import datetime
+from .models import Club
+
+
+import json
+from django.core.files.storage import FileSystemStorage
+from django.utils import timezone
+
+from rest_framework.decorators import api_view, permission_classes, parser_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
+
+from .models import Club
+
+
+def get_user_image(user):
+    if hasattr(user, "profile") and user.profile.image:
+        return user.profile.image.url
+    return None
+
+
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 def manage_club_reviews(request, club_id):
-    try:
-        club = ClubProfile.objects.get(id=club_id)
-    except ClubProfile.DoesNotExist:
-        return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    # ================= GET REQUEST =================
-    if request.method == 'GET':
-        reviews_data = club.reviews if isinstance(club.reviews, list) else []
-        
-        if reviews_data:
-            total_rating = sum(float(r.get('rating', 0)) for r in reviews_data)
-            avg_rating = round(total_rating / len(reviews_data), 1)
+    try:
+        club = Club.objects.get(id=club_id)
+    except Club.DoesNotExist:
+        return Response({"error": "Club not found"}, status=404)
+
+    # ---------- Load reviews ----------
+    try:
+        reviews = json.loads(club.user_reviews or "[]")
+    except json.JSONDecodeError:
+        reviews = []
+
+    # ================= GET =================
+    if request.method == "GET":
+        if reviews:
+            total = sum(float(r.get("rating", 0)) for r in reviews)
+            avg_rating = round(total / len(reviews), 1)
         else:
             avg_rating = 0.0
-        
+
         return Response({
+            "club_id": club.id,
             "average_rating": avg_rating,
-            "total_reviews": len(reviews_data),
-            "reviews": reviews_data
-        }, status=status.HTTP_200_OK)
+            "total_reviews": len(reviews),
+            "reviews": reviews
+        }, status=200)
 
-    # ================= POST REQUEST =================
-    elif request.method == 'POST':
-        rating = request.data.get('rating')
-        comment = request.data.get('comment', None)
-        image = request.FILES.get('image', None)
+    # ================= POST =================
+    if request.method == "POST":
+        rating = request.data.get("rating")
+        comment = request.data.get("comment", "")
+        image = request.FILES.get("image")
 
-        if not rating:
-            return Response({"error": "Rating is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if rating is None:
+            return Response({"error": "rating is required"}, status=400)
+
+        try:
+            rating = float(rating)
+        except ValueError:
+            return Response({"error": "rating must be numeric"}, status=400)
 
         image_url = None
         if image:
@@ -1579,83 +1622,31 @@ def manage_club_reviews(request, club_id):
             image_url = fs.url(filename)
 
         new_review = {
-            'rating': float(rating),
-            'comment': comment,
-            'image_url': image_url,
-            'timestamp': datetime.now().isoformat()
+            "user_id": request.user.id,
+            "user_img": get_user_image(request.user),
+            "rating": rating,
+            "comment": comment,
+            "image_url": image_url,
+            "timestamp": timezone.now().isoformat()
         }
 
-        if not isinstance(club.reviews, list):
-            club.reviews = []
+        reviews.append(new_review)
 
-        club.reviews.append(new_review)
+        # save reviews
+        club.user_reviews = json.dumps(reviews)
+
+        # update average rating
+        total = sum(r["rating"] for r in reviews)
+        club.rating = round(total / len(reviews), 1)
+
         club.save()
 
-        total_rating = sum(float(r['rating']) for r in club.reviews)
-        avg_rating = round(total_rating / len(club.reviews), 1)
-
         return Response({
-            "success_msg": "Review added successfully",
+            "message": "Review added successfully",
             "new_review": new_review,
-            "average_rating": avg_rating,
-            "total_reviews": len(club.reviews)
-        }, status=status.HTTP_201_CREATED)
-
-    # ================= PATCH REQUEST =================
-    elif request.method == 'PATCH':
-        review_index = request.data.get('review_index')  # which review to edit
-        rating = request.data.get('rating')
-        comment = request.data.get('comment')
-        image = request.FILES.get('image', None)
-
-        if review_index is None:
-            return Response({"error": "review_index is required to update a review"}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            review_index = int(review_index)
-        except ValueError:
-            return Response({"error": "review_index must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Make sure club has reviews and that index exists
-        if not isinstance(club.reviews, list) or review_index < 0 or review_index >= len(club.reviews):
-            return Response({"error": "Invalid review index"}, status=status.HTTP_400_BAD_REQUEST)
-
-        review = club.reviews[review_index]
-
-        # Update fields if provided
-        if rating:
-            review['rating'] = float(rating)
-        if comment:
-            review['comment'] = comment
-        if image:
-            fs = FileSystemStorage()
-            filename = fs.save(image.name, image)
-            review['image_url'] = fs.url(filename)
-
-        review['timestamp'] = datetime.now().isoformat()
-
-        # Save updated review back to the list
-        club.reviews[review_index] = review
-        club.save()
-
-        total_rating = sum(float(r.get('rating', 0)) for r in club.reviews)
-        avg_rating = round(total_rating / len(club.reviews), 1)
-
-        return Response({
-            "success_msg": "Review updated successfully",
-            "updated_review": review,
-            "average_rating": avg_rating,
-            "total_reviews": len(club.reviews)
-        }, status=status.HTTP_200_OK)
-
-
-
-
-
-
-
-
-
+            "average_rating": club.rating,
+            "total_reviews": len(reviews)
+        }, status=201)
 
 # 2nd review views.py 
 
@@ -1665,8 +1656,8 @@ def manage_club_reviews(request, club_id):
 @parser_classes([MultiPartParser, FormParser])
 def manage_club_reviewed(request, club_id):
     try:
-        club = ClubProfile.objects.get(id=club_id)
-    except ClubProfile.DoesNotExist:
+        club = Club.objects.get(id=club_id)
+    except Club.DoesNotExist:
         return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND)
 
     user_profile = UserProfile.objects.get(user=request.user)  
@@ -1773,6 +1764,8 @@ def manage_club_reviewed(request, club_id):
             "success_msg": "Review updated successfully",
             "updated_review": review
         }, status=status.HTTP_200_OK)
+
+
 
 
 
@@ -2075,27 +2068,35 @@ def update_follow_status(request):
 
 
 # For Recomendation veiws 
-
-
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+
 from .models import UserProfile
 from .serializers import UserProfileSerializer
+
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]  # 🔥 REQUIRED for image patch
 
     def get_object(self):
-        profile, created = UserProfile.objects.get_or_create(user=self.request.user)
+        profile, created = UserProfile.objects.get_or_create(
+            user=self.request.user
+        )
         return profile
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
+
         import json
-        print(json.dumps(serializer.data, indent=4))
+        print(json.dumps(serializer.data, indent=4))  # debug (optional)
+
         return Response(serializer.data)
-    
+
 
 
 from rest_framework import generics, permissions
@@ -2441,32 +2442,70 @@ from .models import ClubProfile
 from .serializers import ClubProfileSerializered
 
 
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+
+from all_club.models import Club
+
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+
+from all_club.models import Club
+from django.core.cache import cache
+from django.utils import timezone
+from datetime import timedelta
+
+TRENDY_CACHE_KEY = "trendy_clubs"
+TRENDY_CACHE_TTL = 60 * 60 * 12  
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_trendy_club(request):
-    
 
+    cached_data = cache.get(TRENDY_CACHE_KEY)
+    if cached_data:
+        return Response(cached_data, status=status.HTTP_200_OK)
 
-    clubs = ClubProfile.objects.all().order_by('-click_count')
+    clubs = (
+        Club.objects
+        .exclude(rating__isnull=True)
+        .order_by('-rating')[:20]
+    )
 
-    if not clubs.exists():
-        print("[INFO] No clubs found in database.")
-        return Response({"message": "No clubs available."}, status=status.HTTP_404_NOT_FOUND)
+    if not clubs:
+        return Response(
+            {"message": "No clubs available."},
+            status=status.HTTP_404_NOT_FOUND
+        )
 
-    print(f"[DEBUG] Found {clubs.count()} clubs sorted by click count.")
-
-
-    serializer = ClubProfileSerializered(clubs, many=True, context={'request': request})
+    data = [
+        {
+            "id": club.id,
+            "name": club.name,
+            "city": club.city,
+            "club_type": club.club_type,
+            "rating": club.rating,
+            "photo_url": club.photo_url,
+            "address": club.address,
+        }
+        for club in clubs
+    ]
 
     response_data = {
-        "count": len(serializer.data),
-        "results": serializer.data,
+        "last_updated": timezone.now(),
+        "count": len(data),
+        "results": data
     }
 
-    print(f"[INFO] Returning {len(serializer.data)} trendy clubs.")
+    
+    cache.set(TRENDY_CACHE_KEY, response_data, TRENDY_CACHE_TTL)
+
     return Response(response_data, status=status.HTTP_200_OK)
-
-
 
 
 
@@ -2669,7 +2708,6 @@ def nearby_clubs(request):
 
     filter_type = filter_type.lower() if filter_type else None
 
-    # user coords (optional – city search e distance দেখাতে লাগবে)
     user_lat = user_lng = None
     if user_profile.latitude and user_profile.longitude:
         user_lat = float(user_profile.latitude)
@@ -2735,7 +2773,7 @@ def nearby_clubs(request):
     # =================================================
     # FILTER: club type (EDM / lounge / bar)
     # =================================================
-    if filter_type in ["edm", "lounge", "bar"]:
+    if filter_type in ["edm", "lounge", "bar" , "rooftop", "club"]:
 
         clubs = Club.objects.filter(
             club_type__icontains=filter_type
@@ -2758,7 +2796,7 @@ def nearby_clubs(request):
         }, status=200)
 
     # =================================================
-    # DEFAULT / CITY SEARCH (✅ distance added here)
+    # DEFAULT / CITY SEARCH (distance added here)
     # =================================================
     if user_profile.city:
 
@@ -2928,44 +2966,83 @@ def nearby_currently_open_clubs(request):
 
 # is favourite 
 
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+
+from all_club.models import Club
+from owner.models import UserProfile
+
+
 @api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
 def favourite_clubs(request):
-   
+
+    profile = request.user.userprofile
+
+    # -------------------------
+    # PATCH → Add / Remove favourite
+    # -------------------------
     if request.method == 'PATCH':
         club_id = request.data.get('club_id')
         is_fav = request.data.get('is_favourite')
 
         if club_id is None or is_fav is None:
-            return Response({"error": "club_id and is_favourite are required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "club_id and is_favourite are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
-            club = ClubProfile.objects.get(id=club_id)
-        except ClubProfile.DoesNotExist:
-            return Response({"error": "Club not found"}, status=status.HTTP_404_NOT_FOUND)
+            club = Club.objects.get(id=club_id)
+        except Club.DoesNotExist:
+            return Response(
+                {"error": "Club not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         if isinstance(is_fav, str):
             is_fav = is_fav.lower() in ['true', '1', 'yes']
 
-        club.is_favourite = bool(is_fav)
-        club.save()
+        if is_fav:
+            profile.favourite_clubs.add(club)
+            action = "added to"
+        else:
+            profile.favourite_clubs.remove(club)
+            action = "removed from"
 
-        return Response({"message": f"Club '{club.venue_name}' favourite status updated to {club.is_favourite}"}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "message": f"Club '{club.name}' {action} favourites"
+            },
+            status=status.HTTP_200_OK
+        )
 
-    elif request.method == 'GET':
-        favourite_clubs = ClubProfile.objects.filter(is_favourite=True)
-        data = []
-        for club in favourite_clubs:
-            data.append({
-                "id": club.id,
-                "clubName": club.clubName,
-                "club_location": club.club_location,
-                "latitude": club.latitude,
-                "longitude": club.longitude,
-                "is_favourite": club.is_favourite,
-                "phone": club.phone,
-                "email": club.email,
-            })
-        return Response({"favourite_clubs": data}, status=status.HTTP_200_OK)
+    # -------------------------
+    # GET → User favourite list
+    # -------------------------
+    favourite_clubs = profile.favourite_clubs.all()
+
+    data = []
+    for club in favourite_clubs:
+        data.append({
+            "id": club.id,
+            "name": club.name,
+            "city": club.city,
+            "club_type": club.club_type,
+            "rating": club.rating,
+            "photo_url": club.photo_url,
+        })
+
+    return Response(
+        {
+            "count": favourite_clubs.count(),
+            "favourite_clubs": data
+        },
+        status=status.HTTP_200_OK
+    )
+
     
 
 

@@ -271,6 +271,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 
+
 class MusicGenre(models.Model):
     name = models.CharField(max_length=100,unique=True,verbose_name="Genre Name",help_text="Enter a music genre (e.g., Rock, Pop, Jazz)")
     class Meta:
@@ -337,6 +338,11 @@ class UserProfile(models.Model):
     followers = models.PositiveIntegerField(default=0)
     user_reviews = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True , blank= True , null= True)
+    favourite_clubs = models.ManyToManyField(
+        Club,
+        blank=True,
+        related_name="favourited_by"
+    )
 
 
     def __str__(self):

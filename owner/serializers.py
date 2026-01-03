@@ -647,8 +647,14 @@ CITY_LOCATION_MAP = {
 
 class UserProfileSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
-    user_name = serializers.CharField(source='user.full_name', read_only=True)
-    user_img = serializers.ImageField(read_only=True)
+    user_name = serializers.CharField(
+    source="user.full_name",
+    required=False,
+    allow_blank=True
+)
+
+    user_img = serializers.ImageField(required=False, allow_null=True)
+
 
     music_preferences = serializers.SlugRelatedField(
         many=True, slug_field='name', read_only=True
@@ -714,6 +720,24 @@ class UserProfileSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+    
+
+
+    def update(self, instance, validated_data):
+        # ----- USER DATA -----
+        user_data = validated_data.pop("user", None)
+        if user_data and "full_name" in user_data:
+            instance.user.full_name = user_data["full_name"]
+            instance.user.save()
+
+        # ----- PROFILE DATA -----
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+        return instance
+
+
 
 
 class ClubProfileSerializered(serializers.ModelSerializer):
@@ -749,3 +773,6 @@ class NightclubSerializer(serializers.Serializer):
     opening_hours = serializers.DictField(child=serializers.ListField(), allow_null=True)
     photos = serializers.ListField(child=serializers.URLField(), allow_empty=True)
     maps_url = serializers.URLField(allow_null=True)
+
+
+

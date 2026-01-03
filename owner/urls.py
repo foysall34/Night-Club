@@ -125,5 +125,7 @@ urlpatterns = [
 
 
 
+
+
  #all usr details
 ]
